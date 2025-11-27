@@ -17,7 +17,7 @@ from typing import Optional
 
 
 # Configuration
-DATA_DIR = Path("data/raw")
+DATA_DIR = Path("./data/raw")
 IMAGE_SIZE = 224  # Standard for most pretrained models
 BATCH_SIZE = 32
 NUM_WORKERS = 4
@@ -251,7 +251,9 @@ if __name__ == "__main__":
         print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
 
         print("\n✓ Preprocessing pipeline working correctly!")
-
+        #Saving the dataloaders in "./data/processed/dataloaders.pth"
+        torch.save((train_loader, val_loader, test_loader), "./data/processed/dataloaders.pth")
+        print(f"Dataloaders saved to './data/processed/dataloaders.pth'")
     except ValueError as e:
         print(f"\n✗ Error: {e}")
 

@@ -18,12 +18,15 @@ import torch.nn as nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torchvision import models
+import mlflow
+import mlflow.pytorch
 
 from src.cv_model.preprocessing import create_dataloaders
 
 
 # Configuration
 MODELS_DIR = Path("models")
+MLFLOW_TRACKING_URI = f"file:///{MODELS_DIR.absolute()}/mlruns"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -137,8 +140,9 @@ def save_checkpoint(
     model_name: str,
     classes: list[str],
     save_dir: Path = MODELS_DIR,
+    log_to_mlflow: bool = True,
 ) -> Path:
-    """Save model checkpoint."""
+    """Save model checkpoint and optionally log to MLflow."""
     save_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -170,6 +174,11 @@ def save_checkpoint(
     with open(json_path, "w") as f:
         json.dump(metadata, f, indent=2)
 
+    # Log to MLflow
+    if log_to_mlflow and mlflow.active_run():
+        mlflow.log_artifact(str(filepath), artifact_path="checkpoints")
+        mlflow.log_artifact(str(json_path), artifact_path="checkpoints")
+
     return filepath
 
 
@@ -180,9 +189,10 @@ def train(
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
     patience: int = 10,
+    experiment_name: str = "lsc_gesture_recognition",
 ) -> None:
     """
-    Main training function.
+    Main training function with MLflow tracking.
 
     Args:
         model_name: Model architecture to use
@@ -191,7 +201,13 @@ def train(
         learning_rate: Initial learning rate
         weight_decay: L2 regularization
         patience: Early stopping patience
+        experiment_name: MLflow experiment name
     """
+    # Setup MLflow
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(experiment_name)
+
     print("=" * 60)
     print("LSC Gesture Recognition Training")
     print("=" * 60)
@@ -200,6 +216,7 @@ def train(
     print(f"Epochs: {epochs}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
+    print(f"MLflow tracking: {MLFLOW_TRACKING_URI}")
     print("=" * 60)
 
     # Create dataloaders
@@ -220,64 +237,134 @@ def train(
     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=learning_rate / 100)
 
-    # Training loop
-    best_val_acc = 0.0
-    epochs_without_improvement = 0
-
-    print("\nStarting training...")
-    print("-" * 60)
-
-    for epoch in range(1, epochs + 1):
-        start_time = time.time()
-
-        # Train
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, DEVICE
+    # Start MLflow run
+    run_name = f"{model_name}_lr{learning_rate}_bs{batch_size}"
+    with mlflow.start_run(run_name=run_name):
+        # Log parameters
+        mlflow.log_params(
+            {
+                "model_name": model_name,
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "learning_rate": learning_rate,
+                "weight_decay": weight_decay,
+                "patience": patience,
+                "num_classes": num_classes,
+                "classes": ",".join(classes),
+                "optimizer": "AdamW",
+                "scheduler": "CosineAnnealingLR",
+                "device": str(DEVICE),
+                "pretrained": True,
+                "train_samples": len(train_loader.dataset),
+                "val_samples": len(val_loader.dataset),
+                "test_samples": len(test_loader.dataset),
+            }
         )
 
-        # Validate
-        val_loss, val_acc = evaluate(model, val_loader, criterion, DEVICE)
-
-        # Update scheduler
-        scheduler.step()
-
-        # Logging
-        elapsed = time.time() - start_time
-        print(
-            f"Epoch {epoch:3d}/{epochs} | "
-            f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
-            f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
-            f"LR: {scheduler.get_last_lr()[0]:.6f} | "
-            f"Time: {elapsed:.1f}s"
+        # Log model architecture info
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        mlflow.log_params(
+            {
+                "total_params": total_params,
+                "trainable_params": trainable_params,
+            }
         )
 
-        # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            epochs_without_improvement = 0
-            checkpoint_path = save_checkpoint(
-                model, optimizer, epoch, val_acc, model_name, classes
+        # Training loop
+        best_val_acc = 0.0
+        epochs_without_improvement = 0
+        best_checkpoint_path = None
+
+        print("\nStarting training...")
+        print("-" * 60)
+
+        for epoch in range(1, epochs + 1):
+            start_time = time.time()
+
+            # Train
+            train_loss, train_acc = train_one_epoch(
+                model, train_loader, criterion, optimizer, DEVICE
             )
-            print(f"  ↳ New best! Saved to {checkpoint_path.name}")
-        else:
-            epochs_without_improvement += 1
 
-        # Early stopping
-        if epochs_without_improvement >= patience:
-            print(f"\nEarly stopping at epoch {epoch} (no improvement for {patience} epochs)")
-            break
+            # Validate
+            val_loss, val_acc = evaluate(model, val_loader, criterion, DEVICE)
 
-    print("-" * 60)
+            # Update scheduler
+            scheduler.step()
+            current_lr = scheduler.get_last_lr()[0]
 
-    # Final evaluation on test set
-    print("\nEvaluating on test set...")
-    test_loss, test_acc = evaluate(model, test_loader, criterion, DEVICE)
-    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
+            # Log metrics to MLflow
+            mlflow.log_metrics(
+                {
+                    "train_loss": train_loss,
+                    "train_acc": train_acc,
+                    "val_loss": val_loss,
+                    "val_acc": val_acc,
+                    "learning_rate": current_lr,
+                },
+                step=epoch,
+            )
 
-    print("\n" + "=" * 60)
-    print(f"Training complete! Best validation accuracy: {best_val_acc:.4f}")
-    print(f"Models saved to: {MODELS_DIR.absolute()}")
-    print("=" * 60)
+            # Logging
+            elapsed = time.time() - start_time
+            print(
+                f"Epoch {epoch:3d}/{epochs} | "
+                f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
+                f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
+                f"LR: {current_lr:.6f} | "
+                f"Time: {elapsed:.1f}s"
+            )
+
+            # Save best model
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                epochs_without_improvement = 0
+                best_checkpoint_path = save_checkpoint(
+                    model, optimizer, epoch, val_acc, model_name, classes
+                )
+                print(f"  ↳ New best! Saved to {best_checkpoint_path.name}")
+            else:
+                epochs_without_improvement += 1
+
+            # Early stopping
+            if epochs_without_improvement >= patience:
+                print(
+                    f"\nEarly stopping at epoch {epoch} (no improvement for {patience} epochs)"
+                )
+                mlflow.log_param("early_stopped_epoch", epoch)
+                break
+
+        print("-" * 60)
+
+        # Final evaluation on test set
+        print("\nEvaluating on test set...")
+        test_loss, test_acc = evaluate(model, test_loader, criterion, DEVICE)
+        print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_acc:.4f}")
+
+        # Log final metrics
+        mlflow.log_metrics(
+            {
+                "best_val_acc": best_val_acc,
+                "test_loss": test_loss,
+                "test_acc": test_acc,
+            }
+        )
+
+        # Log the best model to MLflow
+        if best_checkpoint_path:
+            mlflow.pytorch.log_model(
+                model,
+                artifact_path="model",
+                registered_model_name=f"lsc_{model_name}",
+            )
+
+        print("\n" + "=" * 60)
+        print(f"Training complete! Best validation accuracy: {best_val_acc:.4f}")
+        print(f"Test accuracy: {test_acc:.4f}")
+        print(f"Models saved to: {MODELS_DIR.absolute()}")
+        print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+        print("=" * 60)
 
 
 def main():
@@ -294,6 +381,12 @@ def main():
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument("--patience", type=int, default=10, help="Early stopping patience")
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        default="lsc_gesture_recognition",
+        help="MLflow experiment name",
+    )
 
     args = parser.parse_args()
 
@@ -304,6 +397,7 @@ def main():
         learning_rate=args.lr,
         weight_decay=args.weight_decay,
         patience=args.patience,
+        experiment_name=args.experiment,
     )
 
 

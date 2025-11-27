@@ -24,7 +24,7 @@ from datetime import datetime
 
 
 # Configuration
-DATA_DIR = Path("data/raw")
+DATA_DIR = Path("../data/raw")
 WINDOW_NAME = "LSC Data Capture - Press letter keys to capture"
 CAPTURE_FEEDBACK_DURATION = 0.3  # seconds to show green border
 CROP_PADDING = 50  # pixels of padding around hand

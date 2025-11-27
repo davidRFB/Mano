@@ -27,6 +27,8 @@ Format: `## [Version] - YYYY-MM-DD`
   - AdamW optimizer with cosine annealing LR
   - Early stopping with patience
   - Checkpoint saving with metadata JSON
+  - **MLflow integration**: logs params, metrics per epoch, artifacts
+  - MLflow tracking stored in `models/mlruns/`
 - `requirements.txt` with opencv, numpy, mediapipe, torch, torchvision, sklearn
 
 ### Added
