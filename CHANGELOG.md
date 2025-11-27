@@ -9,6 +9,27 @@ Format: `## [Version] - YYYY-MM-DD`
 ## [Unreleased]
 
 ### Added
+- `scripts/capture_data.py` - Data collection tool for capturing hand gesture images
+  - Press letter keys (a-z) to capture photos
+  - Auto-saves to `data/raw/{letter}/` directories
+  - Visual feedback on capture
+  - **Hand detection** with MediaPipe (21 landmark points)
+  - **Auto-crop** to hand region with configurable padding
+  - Only captures when hand is detected
+- `src/cv_model/preprocessing.py` - Data preprocessing pipeline
+  - `LSCDataset` PyTorch Dataset class
+  - Train/val/test stratified splitting (70/15/15)
+  - Augmentation: rotation, flip, color jitter, affine transforms
+  - ImageNet normalization for pretrained models
+- `src/cv_model/train.py` - Training script
+  - Supports: MobileNetV2, MobileNetV3, EfficientNet-B0, ResNet18
+  - Pretrained weights from torchvision
+  - AdamW optimizer with cosine annealing LR
+  - Early stopping with patience
+  - Checkpoint saving with metadata JSON
+- `requirements.txt` with opencv, numpy, mediapipe, torch, torchvision, sklearn
+
+### Added
 - Initial project structure
 
 ### Changed

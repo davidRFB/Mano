@@ -18,7 +18,7 @@ Mano/
 │   └── splits/             # Train/val/test indices
 ├── models/                 # Trained model checkpoints (DVC tracked)
 ├── notebooks/              # Jupyter notebooks for exploration
-│   ├── 01_eda.ipynb
+│   ├── 01_data_analysis.ipynb  # Dataset stats, normalization, input range
 │   └── 02_model_eval.ipynb
 ├── src/
 │   ├── cv_model/           # Computer vision model code
@@ -34,6 +34,8 @@ Mano/
 │   │   └── corrector.py    # Text correction logic
 │   └── frontend/           # Streamlit interface
 │       └── app.py          # UI application
+├── scripts/                # Utility scripts
+│   └── capture_data.py     # Data collection tool
 ├── tests/                  # Test suite
 │   ├── test_api.py
 │   ├── test_model.py
@@ -62,14 +64,16 @@ Mano/
 ### `src/cv_model/`
 **Purpose**: Gesture recognition CNN
 
-- `model.py`: PyTorch model definitions (MobileNetV2, EfficientNet)
-- `train.py`: Training script with MLflow logging
-- `inference.py`: Load model and predict from image
-- `preprocessing.py`: Image transforms, augmentation
+- `preprocessing.py`: Dataset class, transforms, augmentation, DataLoaders
+- `train.py`: Training script with early stopping, checkpoint saving
+- `model.py`: (planned) Custom model definitions
+- `inference.py`: (planned) Load model and predict from image
 
 **Key functions**:
-- `train.py::train_model()` - Main training entry point
-- `inference.py::predict_gesture()` - Single image prediction
+- `preprocessing.py::create_dataloaders()` - Create train/val/test DataLoaders
+- `preprocessing.py::LSCDataset` - PyTorch Dataset for gesture images
+- `train.py::train()` - Main training entry point
+- `train.py::get_model()` - Get pretrained torchvision model
 
 ---
 

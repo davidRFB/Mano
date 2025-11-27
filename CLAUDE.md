@@ -36,8 +36,8 @@ def predict_gesture(image, model):
 ```
 
 ### Project Structure Awareness
-- **Always check STRUCTURE.md** before creating new files
-- **Update CHANGELOG.md** when adding features or making significant changes
+- **Always check STRUCTURE.md** before creating new files 
+- **Update CHANGELOG.md** when adding features or making significant changes. Make sure they are finished to update. Wait for user input explicitly saying the feature is finished.
 - **Follow existing patterns** - if similar code exists, match its style
 
 ### Testing
@@ -84,7 +84,7 @@ async def predict_gesture(file: UploadFile = File(...)) -> PredictionResponse:
 ### Before Creating New Files
 1. Check STRUCTURE.md to see if file/location already exists
 2. Follow existing naming patterns
-3. Update STRUCTURE.md after creation
+3. Update STRUCTURE.md only when a feature is finished. A conversation can go for a while before a feature is finished.  Wait for user input explicitly saying the feature is finished.
 
 ---
 
