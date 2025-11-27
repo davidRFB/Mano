@@ -2,8 +2,9 @@
 Real-time inference script for LSC gesture recognition.
 
 Usage:
-    python -m src.cv_model.inference
-    python -m src.cv_model.inference --model models/mobilenet_v2_v1_acc1.00_20251127_204309.pth
+    python -m src.cv_model.inference --list-runs          # List available runs
+    python -m src.cv_model.inference --run-id <RUN_ID>    # Use specific run
+    python -m src.cv_model.inference                       # Use best run from default experiment
 
 Controls:
     - Press ESC or 'q' to quit
@@ -15,12 +16,13 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
+import mlflow
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
 
-from src.cv_model.train import get_model
+from src.cv_model.train import get_model, MODELS_DIR, MLFLOW_TRACKING_URI
 
 
 # Configuration
@@ -37,9 +39,151 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def list_runs(experiment_name: str | None = None) -> None:
+    """List all MLflow runs with their metrics."""
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+    print("=" * 80)
+    print("Available MLflow Runs")
+    print("=" * 80)
+
+    # Get all experiments
+    experiments = mlflow.search_experiments()
+
+    if not experiments:
+        print("No experiments found. Train a model first.")
+        return
+
+    for exp in experiments:
+        if exp.name == "Default":
+            continue
+
+        if experiment_name and exp.name != experiment_name:
+            continue
+
+        print(f"\n📁 Experiment: {exp.name}")
+        print("-" * 80)
+
+        # Get runs for this experiment
+        runs = mlflow.search_runs(
+            experiment_ids=[exp.experiment_id],
+            order_by=["metrics.test_acc DESC"],
+        )
+
+        if runs.empty:
+            print("  No runs found.")
+            continue
+
+        # Display table header
+        print(
+            f"  {'Run ID':<36} {'Model':<18} {'Val Acc':>8} {'Test Acc':>9} {'Status':<10}"
+        )
+        print("  " + "-" * 83)
+
+        for _, run in runs.iterrows():
+            run_id = run["run_id"][:12] + "..."  # Truncate for display
+            full_run_id = run["run_id"]
+            model_name = run.get("params.model_name", "N/A")
+            val_acc = run.get("metrics.best_val_acc", 0)
+            test_acc = run.get("metrics.test_acc", 0)
+            status = run.get("status", "N/A")
+
+            val_acc_str = f"{val_acc:.2%}" if val_acc else "N/A"
+            test_acc_str = f"{test_acc:.2%}" if test_acc else "N/A"
+
+            print(
+                f"  {run_id:<36} {model_name:<18} {val_acc_str:>8} {test_acc_str:>9} {status:<10}"
+            )
+            print(f"     Full ID: {full_run_id}")
+
+    print("\n" + "=" * 80)
+    print("To use a run: python -m src.cv_model.inference --run-id <FULL_RUN_ID>")
+    print("=" * 80)
+
+
+def get_best_run(experiment_name: str = "lsc_gesture_recognition") -> str | None:
+    """Get the run ID with the best test accuracy."""
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+    try:
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if not experiment:
+            return None
+
+        runs = mlflow.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            order_by=["metrics.test_acc DESC"],
+            max_results=1,
+        )
+
+        if runs.empty:
+            return None
+
+        return runs.iloc[0]["run_id"]
+    except Exception:
+        return None
+
+
+def load_model_from_mlflow(run_id: str) -> tuple[torch.nn.Module, list[str]]:
+    """
+    Load trained model from MLflow run.
+
+    Args:
+        run_id: MLflow run ID
+
+    Returns:
+        Tuple of (model, class_names)
+    """
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+
+    print(f"Loading model from MLflow run: {run_id}")
+
+    # Get run info
+    run = mlflow.get_run(run_id)
+    params = run.data.params
+
+    model_name = params.get("model_name", "mobilenet_v2")
+    num_classes = int(params.get("num_classes", 26))
+    classes = params.get("classes", "").split(",")
+
+    # Find checkpoint by directly accessing local mlruns directory
+    # (more reliable than mlflow.artifacts.download_artifacts for local file store)
+    mlruns_dir = MODELS_DIR / "mlruns"
+    checkpoint_path = None
+
+    for exp_dir in mlruns_dir.iterdir():
+        if exp_dir.is_dir() and exp_dir.name not in ["0", "models", ".trash"]:
+            run_dir = exp_dir / run_id / "artifacts" / "checkpoints"
+            if run_dir.exists():
+                checkpoint_files = list(run_dir.glob("*.pth"))
+                if checkpoint_files:
+                    checkpoint_path = sorted(checkpoint_files)[-1]
+                    break
+
+    if checkpoint_path is None:
+        raise FileNotFoundError(
+            f"No checkpoint found for run {run_id}. "
+            f"Searched in {mlruns_dir}"
+        )
+
+    checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+
+    model = get_model(model_name, num_classes, pretrained=False)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model = model.to(DEVICE)
+    model.eval()
+
+    print(f"Loaded {model_name} with {num_classes} classes")
+    print(f"Checkpoint: {checkpoint_path.name}")
+    print(f"Classes: {classes}")
+    print(f"Validation accuracy: {checkpoint.get('val_acc', 'N/A')}")
+
+    return model, classes
+
+
 def load_model(checkpoint_path: Path) -> tuple[torch.nn.Module, list[str]]:
     """
-    Load trained model from checkpoint.
+    Load trained model from checkpoint file (legacy support).
 
     Args:
         checkpoint_path: Path to .pth checkpoint file
@@ -257,38 +401,38 @@ def draw_overlay(
         )
 
 
-def find_latest_model(models_dir: Path = Path("models")) -> Path | None:
-    """Find the most recent model checkpoint."""
-    checkpoints = list(models_dir.glob("*.pth"))
-    if not checkpoints:
-        return None
-
-    # Sort by modification time, newest first
-    checkpoints.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return checkpoints[0]
-
-
-def main(model_path: str | None = None) -> None:
+def main(
+    run_id: str | None = None,
+    model_path: str | None = None,
+    experiment_name: str = "lsc_gesture_recognition",
+) -> None:
     """Main inference loop."""
     print("=" * 60)
     print("LSC Gesture Recognition - Real-time Inference")
     print("=" * 60)
 
-    # Find model
+    # Determine how to load the model
     if model_path:
-        checkpoint_path = Path(model_path)
+        # Legacy: load from file path
+        print(f"Loading from file: {model_path}")
+        model, classes = load_model(Path(model_path))
+    elif run_id:
+        # Load from specific MLflow run
+        print(f"Loading from MLflow run: {run_id}")
+        model, classes = load_model_from_mlflow(run_id)
     else:
-        checkpoint_path = find_latest_model()
-        if checkpoint_path is None:
-            print("Error: No model found in models/ directory")
+        # Find best run from MLflow
+        best_run_id = get_best_run(experiment_name)
+        if best_run_id:
+            print(f"Using best run from experiment '{experiment_name}'")
+            model, classes = load_model_from_mlflow(best_run_id)
+        else:
+            print("Error: No MLflow runs found.")
             print("Train a model first with: python -m src.cv_model.train")
+            print("Or list available runs: python -m src.cv_model.inference --list-runs")
             return
 
-    print(f"Using model: {checkpoint_path}")
     print(f"Device: {DEVICE}")
-
-    # Load model
-    model, classes = load_model(checkpoint_path)
     transform = get_inference_transform()
 
     # Initialize MediaPipe Hands
@@ -387,14 +531,49 @@ def main(model_path: str | None = None) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Real-time LSC gesture recognition")
+    parser = argparse.ArgumentParser(
+        description="Real-time LSC gesture recognition",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m src.cv_model.inference --list-runs
+  python -m src.cv_model.inference --run-id abc123def456
+  python -m src.cv_model.inference --experiment my_experiment
+  python -m src.cv_model.inference --model path/to/checkpoint.pth
+        """,
+    )
+    parser.add_argument(
+        "--list-runs",
+        action="store_true",
+        help="List all available MLflow runs with metrics",
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="MLflow run ID to load model from",
+    )
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        default="lsc_gesture_recognition",
+        help="MLflow experiment name (default: lsc_gesture_recognition)",
+    )
     parser.add_argument(
         "--model",
         type=str,
         default=None,
-        help="Path to model checkpoint (default: latest in models/)",
+        help="Path to model checkpoint file (legacy, prefer --run-id)",
     )
 
     args = parser.parse_args()
-    main(model_path=args.model)
+
+    if args.list_runs:
+        list_runs(args.experiment if args.experiment != "lsc_gesture_recognition" else None)
+    else:
+        main(
+            run_id=args.run_id,
+            model_path=args.model,
+            experiment_name=args.experiment,
+        )
 

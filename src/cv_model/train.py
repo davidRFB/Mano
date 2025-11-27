@@ -3,12 +3,13 @@ Training script for LSC gesture recognition model.
 
 Usage:
     python -m src.cv_model.train --model mobilenet_v2 --epochs 30
+    python -m src.cv_model.train --experiment my_experiment --model resnet18
 
 Models available: mobilenet_v2, mobilenet_v3_small, efficientnet_b0, resnet18
 """
 
 import argparse
-import json
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -132,22 +133,20 @@ def evaluate(
     return epoch_loss, epoch_acc
 
 
-def save_checkpoint(
+def save_checkpoint_to_mlflow(
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     epoch: int,
     val_acc: float,
     model_name: str,
     classes: list[str],
-    save_dir: Path = MODELS_DIR,
-    log_to_mlflow: bool = True,
-) -> Path:
-    """Save model checkpoint and optionally log to MLflow."""
-    save_dir.mkdir(parents=True, exist_ok=True)
+) -> str:
+    """Save model checkpoint to MLflow artifacts only."""
+    if not mlflow.active_run():
+        raise RuntimeError("No active MLflow run")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{model_name}_v1_acc{val_acc:.2f}_{timestamp}.pth"
-    filepath = save_dir / filename
+    filename = f"{model_name}_acc{val_acc:.2f}_{timestamp}.pth"
 
     checkpoint = {
         "model_state_dict": model.state_dict(),
@@ -159,27 +158,13 @@ def save_checkpoint(
         "num_classes": len(classes),
     }
 
-    torch.save(checkpoint, filepath)
-
-    # Also save metadata as JSON
-    metadata = {
-        "model_name": model_name,
-        "epoch": epoch,
-        "val_acc": val_acc,
-        "classes": classes,
-        "num_classes": len(classes),
-        "timestamp": timestamp,
-    }
-    json_path = filepath.with_suffix(".json")
-    with open(json_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-
-    # Log to MLflow
-    if log_to_mlflow and mlflow.active_run():
+    # Save to temp file and log to MLflow
+    with tempfile.TemporaryDirectory() as tmpdir:
+        filepath = Path(tmpdir) / filename
+        torch.save(checkpoint, filepath)
         mlflow.log_artifact(str(filepath), artifact_path="checkpoints")
-        mlflow.log_artifact(str(json_path), artifact_path="checkpoints")
 
-    return filepath
+    return filename
 
 
 def train(
@@ -274,7 +259,7 @@ def train(
         # Training loop
         best_val_acc = 0.0
         epochs_without_improvement = 0
-        best_checkpoint_path = None
+        best_checkpoint_name = None
 
         print("\nStarting training...")
         print("-" * 60)
@@ -316,14 +301,14 @@ def train(
                 f"Time: {elapsed:.1f}s"
             )
 
-            # Save best model
+            # Save best model to MLflow
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 epochs_without_improvement = 0
-                best_checkpoint_path = save_checkpoint(
+                best_checkpoint_name = save_checkpoint_to_mlflow(
                     model, optimizer, epoch, val_acc, model_name, classes
                 )
-                print(f"  ↳ New best! Saved to {best_checkpoint_path.name}")
+                print(f"  ↳ New best! Saved to MLflow: {best_checkpoint_name}")
             else:
                 epochs_without_improvement += 1
 
@@ -351,19 +336,23 @@ def train(
             }
         )
 
-        # Log the best model to MLflow
-        if best_checkpoint_path:
+        # Log the final model to MLflow model registry
+        if best_checkpoint_name:
             mlflow.pytorch.log_model(
                 model,
                 artifact_path="model",
                 registered_model_name=f"lsc_{model_name}",
             )
 
+        run_id = mlflow.active_run().info.run_id
+
         print("\n" + "=" * 60)
         print(f"Training complete! Best validation accuracy: {best_val_acc:.4f}")
         print(f"Test accuracy: {test_acc:.4f}")
-        print(f"Models saved to: {MODELS_DIR.absolute()}")
-        print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+        print(f"MLflow experiment: {experiment_name}")
+        print(f"MLflow run ID: {run_id}")
+        print(f"\nTo use this model for inference:")
+        print(f"  python -m src.cv_model.inference --run-id {run_id}")
         print("=" * 60)
 
 
