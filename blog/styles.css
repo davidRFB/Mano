@@ -1,0 +1,59 @@
+/* Custom styles for MANO blog */
+
+/* Typography */
+body {
+  font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Fira Sans', 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+}
+
+/* Code blocks */
+pre {
+  border-radius: 8px;
+  border-left: 4px solid #6c5ce7;
+}
+
+/* Callouts */
+.callout {
+  border-radius: 8px;
+}
+
+/* Images */
+.quarto-figure img {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Cards for post listings */
+.quarto-post {
+  border-radius: 12px;
+  transition: transform 0.2s ease;
+}
+
+.quarto-post:hover {
+  transform: translateY(-4px);
+}
+
+/* Accent colors */
+a {
+  color: #6c5ce7;
+}
+
+a:hover {
+  color: #a29bfe;
+}
+
+/* Tables */
+table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th {
+  background-color: #6c5ce7;
+  color: white;
+}
+

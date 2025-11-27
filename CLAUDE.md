@@ -95,7 +95,8 @@ async def predict_gesture(file: UploadFile = File(...)) -> PredictionResponse:
 2. **Plan changes**: Ask questions if unclear
 3. **Implement incrementally**: One logical unit at a time
 4. **Test immediately**: Don't accumulate untested code
-5. **Update documentation**: CHANGELOG.md + STRUCTURE.md if needed
+5. **Update documentation**: CHANGELOG.md + STRUCTURE.md if needed. 
+6. We are also documenting the progress for a blog in the folder blog/. there we will add files in md file but also will be the output place for the plots we generate with notebooks.
 
 ### When Debugging
 1. **Reproduce first**: Ensure you understand the problem

@@ -1,0 +1,121 @@
+---
+title: "When 100% Accuracy is a Red Flag"
+description: "Diagnosing why our model aces the test set but fails in real-world inference"
+author: "MANO Team"
+date: "2025-11-27"
+categories: [analysis, debugging, ml]
+image: "../../figures/02-training-curves.png"
+---
+
+## The Problem
+
+Our MobileNetV2 model achieved **100% test accuracy**. Sounds great, right?
+
+But when we ran real-time inference with a webcam, predictions were:
+
+- Low confidence (30-50%)
+- Often wrong
+- Inconsistent frame to frame
+
+Something was very wrong.
+
+## Investigation
+
+We dug into the data and model to find the root cause.
+
+### 1. Data Leakage: Near-Duplicate Images
+
+Our capture script was running at **12+ images per second**. That means consecutive images are nearly identical:
+
+![Consecutive captures are almost identical](../../figures/02-consecutive-images.png)
+
+When we randomly split train/val/test, near-duplicates ended up in all three sets. The model wasn't learning gestures—it was memorizing specific frames.
+
+**Evidence**: Correlation between consecutive images was >0.95
+
+### 2. Class Imbalance
+
+Not all letters had equal representation:
+
+![Class distribution](../../figures/02-class-distribution.png)
+
+| Statistic | Value |
+|-----------|-------|
+| Min images | 46 (B) |
+| Max images | 129 (T) |
+| Imbalance ratio | 2.8x |
+
+Letter T had the most samples—and coincidentally worked best during inference.
+
+### 3. Training Curves Tell the Story
+
+![Training curves](../../figures/02-training-curves.png)
+
+Both train and validation accuracy hit 100% almost immediately. Classic sign of:
+
+- Data leakage
+- Model memorizing rather than generalizing
+
+### 4. Inference Robustness Test
+
+We tested the model on augmented versions of training images:
+
+| Condition | Letter T | Letter A | Letter B |
+|-----------|----------|----------|----------|
+| Original | 98.7% ✅ | 100% ✅ | 99.6% ✅ |
+| Bright | 97.6% ✅ | 100% ✅ | 99.4% ✅ |
+| Dark | 96.1% ✅ | 99.4% ✅ | 99.2% ✅ |
+| Blurred | 44.6% ⚠️ | 99.3% ✅ | 97.7% ✅ |
+| Color Shift | 38.0% ❌ | 94.3% ✅ | 83.8% ⚠️ |
+
+The model struggles with blur and color changes—exactly what happens in real webcam conditions.
+
+## Root Causes
+
+1. **Near-duplicate images** from fast capture rate
+2. **Random splits** caused data leakage
+3. **Limited variation** in training data (single session, same background)
+4. **Distribution shift** between training images and live webcam
+
+## The Fix (Next Steps)
+
+### Data Collection
+- Slower capture rate (1-2 img/sec max)
+- Multiple sessions with varied conditions
+- Different backgrounds, lighting, hand positions
+
+### Data Splitting  
+- **Temporal splits**: Keep all images from one session together
+- Prevents near-duplicates from leaking across sets
+
+### Augmentation
+- Stronger augmentation during training
+- Random blur, brightness, color shifts
+- Better prepares model for real-world variation
+
+### Dataset Versioning
+We set up **DVC** to track data versions:
+
+```bash
+dvc add data/raw
+dvc push
+git commit -m "Data v1: initial capture"
+```
+
+Now we can:
+
+- Track data evolution
+- Compare models trained on different data versions
+- Roll back if needed
+
+## Lessons Learned
+
+1. **High accuracy can be misleading** - always test on realistic conditions
+2. **Data quality > data quantity** - 1,871 near-duplicate images aren't better than 500 diverse ones
+3. **Capture rate matters** - fast capture creates correlation problems
+4. **Version your data** - just as important as versioning code
+
+---
+
+*Next: Capturing better data and training v2 of the model.*
+

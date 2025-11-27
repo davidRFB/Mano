@@ -1,0 +1,62 @@
+---
+title: "Project Kickoff: Building a Sign Language Translator"
+description: "Why I started MANO and the initial setup for translating Colombian Sign Language"
+author: "MANO Team"
+date: "2025-11-27"
+categories: [setup, planning]
+image: "../../figures/01-project-overview.png"
+---
+
+## The Problem
+
+Communication barriers affect millions of deaf and hard-of-hearing people worldwide. In Colombia, the deaf community uses **Lengua de Señas Colombiana (LSC)** - Colombian Sign Language. While there are interpreters and learning resources, real-time translation technology is still limited.
+
+## The Vision
+
+Build an open-source tool that:
+
+1. Uses a simple webcam to capture hand gestures
+2. Recognizes LSC alphabet letters in real-time
+3. Uses LLMs to correct letter sequences into meaningful words
+4. Runs fast enough for actual conversations
+
+## Initial Setup
+
+### Data Collection
+
+I built a simple capture tool using MediaPipe for hand detection:
+
+```python
+# Key features of capture_data.py
+- Press any letter (a-z) to capture that gesture
+- MediaPipe detects and tracks 21 hand landmarks
+- Auto-crops to hand region with padding
+- Only saves when hand is detected
+```
+
+First capture session: **1,871 images** across all 26 letters.
+
+### Model Choice
+
+Started with **MobileNetV2** because:
+
+- Pretrained on ImageNet (transfer learning)
+- Lightweight enough for real-time inference
+- Good accuracy on similar gesture recognition tasks
+
+### Experiment Tracking
+
+Set up **MLflow** to track:
+
+- Training hyperparameters
+- Metrics per epoch
+- Model checkpoints
+
+## What's Next
+
+The first model achieved 100% test accuracy... which is suspicious. Next post will dive into why that's actually a problem and what we found.
+
+---
+
+*This is the beginning of the MANO journey. Follow along!*
+

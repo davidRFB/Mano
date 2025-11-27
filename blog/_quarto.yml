@@ -1,0 +1,38 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "MANO - Building a Sign Language Translator"
+  description: "A journey through building a Colombian Sign Language (LSC) translator using computer vision and LLMs"
+  
+  navbar:
+    background: "#1a1a2e"
+    foreground: "#eaeaea"
+    left:
+      - href: index.qmd
+        text: Home
+      - href: posts.qmd
+        text: Posts
+    right:
+      - icon: github
+        href: https://github.com/YOUR_USERNAME/mano
+  
+  page-footer:
+    center: "MANO Project - Colombian Sign Language Translator"
+    background: "#1a1a2e"
+
+format:
+  html:
+    theme:
+      light: flatly
+      dark: darkly
+    css: styles.css
+    toc: true
+    code-fold: true
+    code-tools: true
+    highlight-style: github-dark
+
+execute:
+  freeze: auto
+

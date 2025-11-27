@@ -1,0 +1,45 @@
+---
+title: "MANO"
+subtitle: "Building a Colombian Sign Language Translator"
+---
+
+## Welcome
+
+**MANO** (Spanish for "hand") is an open-source project to build a real-time Colombian Sign Language (LSC) translator using computer vision and large language models.
+
+This blog documents the journey—the wins, the struggles, the learnings, and everything in between.
+
+## The Goal
+
+Create a system that:
+
+1. **Sees** hand gestures through a webcam
+2. **Recognizes** Colombian Sign Language letters
+3. **Corrects** sequences into meaningful Spanish words using LLMs
+4. **Runs** in real-time for practical communication
+
+## Current Status
+
+| Component | Status |
+|-----------|--------|
+| Data Collection | ✅ 1,871 images captured |
+| CV Model | ⚠️ Overfitting (needs better data) |
+| Inference Pipeline | ✅ Working |
+| LLM Integration | 🔜 Planned |
+| Web Interface | 🔜 Planned |
+
+## Latest Posts
+
+Check out the [Posts](posts.qmd) page for the full journey.
+
+## Tech Stack
+
+- **Computer Vision**: PyTorch, MediaPipe, MobileNetV2
+- **Experiment Tracking**: MLflow, DVC
+- **LLM**: Claude/GPT (planned)
+- **Deployment**: FastAPI, Docker, Cloud Run (planned)
+
+---
+
+*Follow along as we build something meaningful, one commit at a time.*
+
