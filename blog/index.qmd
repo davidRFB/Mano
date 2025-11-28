@@ -43,3 +43,6 @@ Check out the [Posts](posts.qmd) page for the full journey.
 
 *Follow along as we build something meaningful, one commit at a time.*
 
+
+
+
