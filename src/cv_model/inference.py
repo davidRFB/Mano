@@ -7,11 +7,19 @@ Usage:
     python -m src.cv_model.inference                       # Use best run from default experiment
 
 Controls:
-    - Press ESC or 'q' to quit
-    - Hand gesture predictions displayed in real-time
+    - SPACE: Manually capture current letter to buffer
+    - BACKSPACE: Delete last letter from buffer
+    - C: Clear entire buffer
+    - ENTER: Send buffer to LLM for correction
+    - ESC or 'q': Quit
+
+Letter Capture:
+    - Manual: Press SPACE to add current prediction
+    - Auto: Letters are auto-captured when stable for ~0.5s (15 frames)
 """
 
 import argparse
+import logging
 from pathlib import Path
 
 import cv2
@@ -24,13 +32,30 @@ from torchvision import transforms
 
 from src.cv_model.train import get_model, MODELS_DIR, MLFLOW_TRACKING_URI
 
+# LLM corrector (optional - graceful fallback if not available)
+try:
+    from src.llm.corrector import SignLanguageCorrector
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+    SignLanguageCorrector = None
+
+logger = logging.getLogger(__name__)
+
 
 # Configuration
-WINDOW_NAME = "LSC Gesture Recognition - Press ESC to quit"
+WINDOW_NAME = "LSC Gesture Recognition"
 IMAGE_SIZE = 224
 MIN_DETECTION_CONFIDENCE = 0.7
 MIN_TRACKING_CONFIDENCE = 0.5
 CROP_PADDING = 50
+
+# Letter capture configuration
+STABILITY_THRESHOLD = 10  # Frames before auto-capture (~0.5s at 30fps)
+MIN_CAPTURE_CONFIDENCE = 0.4  # Minimum confidence for capture
+
+# LLM configuration
+DEFAULT_LLM_MODEL = "llama3.2"
 
 # ImageNet normalization (must match training)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -325,11 +350,14 @@ def draw_overlay(
     hand_detected: bool,
     prediction: str | None,
     confidence: float | None,
+    letter_buffer: list[str] | None = None,
+    corrected_text: str | None = None,
+    stability_progress: float = 0.0,
 ) -> None:
     """Draw status overlay on frame."""
     h, w = frame.shape[:2]
 
-    # Status bar background
+    # Top status bar background
     cv2.rectangle(frame, (0, 0), (w, 80), (40, 40, 40), -1)
 
     # Title
@@ -346,10 +374,10 @@ def draw_overlay(
     # Instructions
     cv2.putText(
         frame,
-        "Press ESC to quit",
+        "SPACE:add | BACKSPACE:del | C:clear | ENTER:correct | ESC:quit",
         (10, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
+        0.4,
         (180, 180, 180),
         1,
     )
@@ -400,16 +428,104 @@ def draw_overlay(
             thickness,
         )
 
+        # Stability progress bar (below prediction)
+        if stability_progress > 0:
+            bar_width = text_w + 20
+            bar_height = 8
+            bar_x = x_pos - 10
+            bar_y = y_pos + 15
+
+            # Background bar
+            cv2.rectangle(
+                frame,
+                (bar_x, bar_y),
+                (bar_x + bar_width, bar_y + bar_height),
+                (100, 100, 100),
+                -1,
+            )
+
+            # Progress bar
+            progress_width = int(bar_width * stability_progress)
+            cv2.rectangle(
+                frame,
+                (bar_x, bar_y),
+                (bar_x + progress_width, bar_y + bar_height),
+                (0, 200, 255),
+                -1,
+            )
+
+    # Bottom panel for letter buffer and corrected text
+    bottom_panel_y = h - 100
+    cv2.rectangle(frame, (0, bottom_panel_y), (w, h), (40, 40, 40), -1)
+
+    # Letter buffer display
+    buffer_text = "Buffer: " + " ".join([l.upper() for l in (letter_buffer or [])])
+    if not letter_buffer:
+        buffer_text = "Buffer: (empty - show hand gestures to capture)"
+
+    cv2.putText(
+        frame,
+        buffer_text,
+        (10, bottom_panel_y + 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 0),
+        2,
+    )
+
+    # Corrected text display
+    if corrected_text:
+        cv2.putText(
+            frame,
+            f"Corrected: {corrected_text}",
+            (10, bottom_panel_y + 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2,
+        )
+    else:
+        cv2.putText(
+            frame,
+            "Press ENTER to correct word",
+            (10, bottom_panel_y + 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (150, 150, 150),
+            1,
+        )
+
 
 def main(
     run_id: str | None = None,
     model_path: str | None = None,
     experiment_name: str = "lsc_gesture_recognition",
+    llm_model: str | None = None,
+    disable_llm: bool = False,
 ) -> None:
     """Main inference loop."""
     print("=" * 60)
     print("LSC Gesture Recognition - Real-time Inference")
     print("=" * 60)
+
+    # Initialize LLM corrector (optional)
+    corrector = None
+    if not disable_llm and LLM_AVAILABLE:
+        model_name = llm_model or DEFAULT_LLM_MODEL
+        try:
+            corrector = SignLanguageCorrector(model=model_name)
+            if corrector.check_connection():
+                print(f"LLM corrector initialized: {model_name}")
+            else:
+                print(f"LLM model '{model_name}' not available. Run: ollama pull {model_name}")
+                corrector = None
+        except Exception as e:
+            logger.warning(f"Failed to initialize LLM corrector: {e}")
+            corrector = None
+    elif not LLM_AVAILABLE:
+        print("LLM corrector not available (ollama package not installed)")
+    elif disable_llm:
+        print("LLM corrector disabled by user")
 
     # Determine how to load the model
     if model_path:
@@ -457,10 +573,25 @@ def main(
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     print("\nCamera ready! Show your hand to see predictions.")
+    print("Controls:")
+    print("  SPACE     - Manually capture current letter")
+    print("  BACKSPACE - Delete last letter")
+    print("  C         - Clear entire buffer")
+    print("  ENTER     - Send buffer to LLM for correction")
+    print("  ESC/q     - Quit")
     print("=" * 60)
 
+    # Prediction state
     current_prediction = None
     current_confidence = None
+
+    # Letter buffer state
+    letter_buffer: list[str] = []
+    corrected_text: str | None = None
+
+    # Stability tracking for auto-capture
+    stability_counter = 0
+    last_stable_letter: str | None = None
 
     while True:
         ret, frame = cap.read()
@@ -506,21 +637,99 @@ def main(
 
                     # Draw prediction on frame
                     draw_prediction(frame, current_prediction, current_confidence, current_bbox)
+
+                    # Stability-based auto-capture
+                    if current_confidence and current_confidence >= MIN_CAPTURE_CONFIDENCE:
+                        if current_prediction == last_stable_letter:
+                            stability_counter += 1
+                            # Auto-capture when stable for STABILITY_THRESHOLD frames
+                            if stability_counter >= STABILITY_THRESHOLD:
+                                # Capture the letter
+                                letter_buffer.append(current_prediction)
+                                corrected_text = None  # Clear old correction
+                                print(f"[AUTO] Captured: {current_prediction.upper()} | Buffer: {' '.join([l.upper() for l in letter_buffer])}")
+                                # Reset stability counter to prevent rapid capture
+                                stability_counter = 0
+                        else:
+                            # Different letter, reset stability
+                            last_stable_letter = current_prediction
+                            stability_counter = 1
+                    else:
+                        # Low confidence, reset stability
+                        stability_counter = 0
+                        last_stable_letter = None
         else:
             current_prediction = None
             current_confidence = None
+            # Reset stability when hand is not detected
+            stability_counter = 0
+            last_stable_letter = None
 
-        # Draw overlay
-        draw_overlay(frame, hand_detected, current_prediction, current_confidence)
+        # Calculate stability progress for UI
+        stability_progress = min(stability_counter / STABILITY_THRESHOLD, 1.0)
+
+        # Draw overlay with buffer
+        draw_overlay(
+            frame,
+            hand_detected,
+            current_prediction,
+            current_confidence,
+            letter_buffer,
+            corrected_text,
+            stability_progress,
+        )
 
         # Show frame
         cv2.imshow(WINDOW_NAME, frame)
 
         # Handle key press
         key = cv2.waitKey(1) & 0xFF
+
         if key == 27 or key == ord("q"):
             print("\nExiting...")
             break
+
+        elif key == ord(" "):  # SPACE - manual capture
+            if current_prediction and current_confidence:
+                if current_confidence >= MIN_CAPTURE_CONFIDENCE:
+                    letter_buffer.append(current_prediction)
+                    corrected_text = None  # Clear old correction
+                    print(f"[MANUAL] Captured: {current_prediction.upper()} | Buffer: {' '.join([l.upper() for l in letter_buffer])}")
+                    # Reset stability to prevent immediate auto-capture
+                    stability_counter = 0
+                else:
+                    print(f"[SKIP] Confidence too low ({current_confidence:.0%}), need >= {MIN_CAPTURE_CONFIDENCE:.0%}")
+
+        elif key == 8:  # BACKSPACE - delete last letter
+            if letter_buffer:
+                removed = letter_buffer.pop()
+                corrected_text = None  # Clear old correction
+                print(f"[DELETE] Removed: {removed.upper()} | Buffer: {' '.join([l.upper() for l in letter_buffer]) if letter_buffer else '(empty)'}")
+
+        elif key == ord("c") or key == ord("C"):  # C - clear buffer
+            if letter_buffer:
+                letter_buffer.clear()
+                corrected_text = None
+                print("[CLEAR] Buffer cleared")
+
+        elif key == 13:  # ENTER - trigger LLM correction
+            if letter_buffer:
+                print(f"[CORRECT] Sending to LLM: {' '.join([l.upper() for l in letter_buffer])}")
+                if corrector:
+                    try:
+                        result = corrector.correct_sequence(letter_buffer)
+                        corrected_text = result.corrected
+                        print(f"[RESULT] {corrected_text} (confidence: {result.confidence})")
+                        #if result.explanation:
+                        #    print(f"[NOTE] {result.explanation}")
+                    except Exception as e:
+                        logger.error(f"LLM correction failed: {e}")
+                        corrected_text = f"(Error: {str(e)[:30]})"
+                else:
+                    corrected_text = "".join(letter_buffer)  # Fallback: just join letters
+                    print(f"[FALLBACK] No LLM available, joined letters: {corrected_text}")
+            else:
+                print("[SKIP] Buffer is empty, nothing to correct")
 
     # Cleanup
     hands.close()
@@ -540,6 +749,8 @@ Examples:
   python -m src.cv_model.inference --run-id abc123def456
   python -m src.cv_model.inference --experiment my_experiment
   python -m src.cv_model.inference --model path/to/checkpoint.pth
+  python -m src.cv_model.inference --llm-model mistral
+  python -m src.cv_model.inference --no-llm
         """,
     )
     parser.add_argument(
@@ -565,6 +776,17 @@ Examples:
         default=None,
         help="Path to model checkpoint file (legacy, prefer --run-id)",
     )
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default=None,
+        help=f"LLM model for text correction (default: {DEFAULT_LLM_MODEL})",
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Disable LLM correction",
+    )
 
     args = parser.parse_args()
 
@@ -575,5 +797,7 @@ Examples:
             run_id=args.run_id,
             model_path=args.model,
             experiment_name=args.experiment,
+            llm_model=args.llm_model,
+            disable_llm=args.no_llm,
         )
 

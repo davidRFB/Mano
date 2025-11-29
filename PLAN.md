@@ -259,6 +259,74 @@
 
 ---
 
+
+### LLM Integration
+
+**Goal**: Add text correction capabilities
+
+#### Actions:
+1. **LLM Setup**
+   ```bash
+   pip install openai anthropic langchain
+   ```
+
+2. **LLM Service** (`src/llm/corrector.py`)
+   ```python
+   from anthropic import Anthropic
+   import os
+   
+   class SignLanguageCorrector:
+       def __init__(self):
+           self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+       
+       def correct_sequence(self, letters: list[str]) -> dict:
+           """
+           Correct a sequence of letters to form Spanish words
+           """
+           prompt = f"""You are an expert in Spanish language and Colombian Sign Language.
+   
+   The following sequence of letters was recognized from sign language gestures:
+   {' '.join(letters)}
+   
+   Task:
+   1. Correct any spelling errors
+   2. Form coherent Spanish word(s)
+   3. Consider common LSC recognition errors
+   
+   Return only the corrected word(s) in Spanish."""
+   
+           message = self.client.messages.create(
+               model="claude-sonnet-4-20250514",
+               max_tokens=100,
+               messages=[
+                   {"role": "user", "content": prompt}
+               ]
+           )
+           
+           corrected_text = message.content[0].text.strip()
+           
+           return {
+               "original_sequence": letters,
+               "corrected_text": corrected_text,
+               "confidence": "high"  # Could add logic here
+           }
+   ```
+
+
+4. **Test LLM Integration**
+   ```python
+   # Test cases
+   test_sequences = [
+       ["H", "O", "L", "A"],         # Easy case
+       ["C", "A", "S", "S", "A"],    # Common word
+       ["M", "U", "N", "D", "O"],    # Another test
+   ]
+   ```
+
+#### Deliverables:
+- ✅ LLM integration working
+
+---
 ## **PHASE 2: API Development & Containerization** (Weeks 5-8)
 
 ### Week 5: FastAPI Development
@@ -550,93 +618,7 @@
 
 ## **PHASE 3: LLM Integration & Frontend** (Weeks 9-12)
 
-### Week 9: LLM Integration
 
-**Goal**: Add text correction capabilities
-
-#### Actions:
-1. **LLM Setup**
-   ```bash
-   pip install openai anthropic langchain
-   ```
-
-2. **LLM Service** (`src/llm/corrector.py`)
-   ```python
-   from anthropic import Anthropic
-   import os
-   
-   class SignLanguageCorrector:
-       def __init__(self):
-           self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-       
-       def correct_sequence(self, letters: list[str]) -> dict:
-           """
-           Correct a sequence of letters to form Spanish words
-           """
-           prompt = f"""You are an expert in Spanish language and Colombian Sign Language.
-   
-   The following sequence of letters was recognized from sign language gestures:
-   {' '.join(letters)}
-   
-   Task:
-   1. Correct any spelling errors
-   2. Form coherent Spanish word(s)
-   3. Consider common LSC recognition errors
-   
-   Return only the corrected word(s) in Spanish."""
-   
-           message = self.client.messages.create(
-               model="claude-sonnet-4-20250514",
-               max_tokens=100,
-               messages=[
-                   {"role": "user", "content": prompt}
-               ]
-           )
-           
-           corrected_text = message.content[0].text.strip()
-           
-           return {
-               "original_sequence": letters,
-               "corrected_text": corrected_text,
-               "confidence": "high"  # Could add logic here
-           }
-   ```
-
-3. **New API Endpoint** (`src/api/main.py`)
-   ```python
-   from src.llm.corrector import SignLanguageCorrector
-   from pydantic import BaseModel
-   
-   corrector = SignLanguageCorrector()
-   
-   class LetterSequence(BaseModel):
-       letters: list[str]
-   
-   @app.post("/correct_word")
-   async def correct_word(sequence: LetterSequence):
-       try:
-           result = corrector.correct_sequence(sequence.letters)
-           return result
-       except Exception as e:
-           raise HTTPException(status_code=500, detail=str(e))
-   ```
-
-4. **Test LLM Integration**
-   ```python
-   # Test cases
-   test_sequences = [
-       ["H", "O", "L", "A"],         # Easy case
-       ["C", "A", "S", "S", "A"],    # Common word
-       ["M", "U", "N", "D", "O"],    # Another test
-   ]
-   ```
-
-#### Deliverables:
-- ✅ LLM integration working
-- ✅ `/correct_word` endpoint functional
-- ✅ Handles 5+ test cases successfully
-
----
 
 ### Week 10: Streamlit Frontend
 
