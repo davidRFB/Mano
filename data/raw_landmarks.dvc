@@ -1,0 +1,6 @@
+outs:
+- md5: ab6efc5498a2f487be0a6a8762089301.dir
+  size: 59335197
+  nfiles: 3080
+  hash: md5
+  path: raw_landmarks
