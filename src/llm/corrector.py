@@ -1,27 +1,35 @@
 """
-Sign Language Corrector using local LLMs via Ollama.
+Sign Language Corrector - Fast LLM-based Spanish word correction.
 
-Corrects sequences of letters (from sign language recognition) into
-coherent Spanish words or phrases.
+Supports multiple backends:
+- Groq (default, ~100-200ms, free) 
+- Ollama (local, slower)
 
 Usage:
     from src.llm.corrector import SignLanguageCorrector
-
-    corrector = SignLanguageCorrector(model="llama3.2")
-    result = corrector.correct_sequence(["h", "o", "l", "a"])
-    print(result)  # {"original": ["h", "o", "l", "a"], "corrected": "hola", ...}
+    
+    # Fast (Groq - requires GROQ_API_KEY env var)
+    corrector = SignLanguageCorrector()
+    
+    # Local (Ollama - slower but offline)
+    corrector = SignLanguageCorrector(backend="ollama", model="llama3.2")
 """
 
 import json
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
+# Auto-load .env file if python-dotenv is available
 try:
-    import ollama
-    OLLAMA_AVAILABLE = True
+    from dotenv import load_dotenv
+    # Load from project root
+    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    load_dotenv(env_path)
 except ImportError:
-    OLLAMA_AVAILABLE = False
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -29,259 +37,162 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CorrectionResult:
     """Result of letter sequence correction."""
-
     original: list[str]
     corrected: str
     confidence: Literal["high", "medium", "low"]
-    #explanation: str | None = None
 
 
-# Default prompt template for Spanish word correction
-DEFAULT_PROMPT_TEMPLATE = """Eres un experto en español y en el lenguaje de señas colombiano (LSC).
-
-Se te proporciona una secuencia de letras reconocidas de gestos de lenguaje de señas. Tu tarea es corregir errores de reconocimiento y formar palabras coherentes en español.
-
-Secuencia de letras: {letters}
-
-Instrucciones:
-1. Analiza la secuencia de letras
-2. Identifica la palabra o palabras más probables en español
-3. Considera errores comunes de reconocimiento:
-   - Letras similares visualmente (e/c, m/n, b/d, p/q, u/v)
-   - Letras faltantes o duplicadas
-   - Confusión entre vocales
-4. Responde SOLO con un objeto JSON válido
-
-Formato de respuesta (JSON):
-{{
-    "corrected": "palabra corregida en español",
-    "confidence": "high" | "medium" | "low",
-}}
-
-Responde únicamente con el JSON, sin texto adicional."""
+# Short prompt for speed
+FAST_PROMPT = """Corrige estas letras a palabra española: {letters}
+Responde SOLO JSON: {{"corrected": "palabra", "confidence": "high"}}"""
 
 
 class SignLanguageCorrector:
-    """
-    Corrects letter sequences from sign language recognition into Spanish words.
-
-    Uses local LLMs via Ollama for inference.
-
-    Args:
-        model: Ollama model name (default: "llama3.2")
-        prompt_template: Custom prompt template (uses DEFAULT_PROMPT_TEMPLATE if None)
-        timeout: Request timeout in seconds
-    """
+    """Fast Spanish word corrector using Groq or Ollama."""
 
     def __init__(
         self,
-        model: str = "llama3.2",
-        prompt_template: str | None = None,
-        timeout: float = 30.0,
+        backend: Literal["groq", "ollama"] = "groq",
+        model: str | None = None,
     ):
-        if not OLLAMA_AVAILABLE:
-            raise ImportError(
-                "ollama package not installed. Install with: pip install ollama"
-            )
+        self.backend = backend
+        
+        if backend == "groq":
+            self.model = model or "llama-3.1-8b-instant"
+            self._init_groq()
+        else:
+            self.model = model or "llama3.2"
+            self._init_ollama()
 
-        self.model = model
-        self.prompt_template = prompt_template or DEFAULT_PROMPT_TEMPLATE
-        self.timeout = timeout
-        self._client: ollama.Client | None = None
+    def _init_groq(self):
+        """Initialize Groq client."""
+        try:
+            from groq import Groq
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                raise ValueError("GROQ_API_KEY environment variable not set")
+            self._client = Groq(api_key=api_key)
+        except ImportError:
+            raise ImportError("groq package not installed. Run: pip install groq")
 
-    @property
-    def client(self) -> "ollama.Client":
-        """Lazy initialization of Ollama client."""
-        if self._client is None:
+    def _init_ollama(self):
+        """Initialize Ollama client."""
+        try:
+            import ollama
             self._client = ollama.Client()
-        return self._client
+        except ImportError:
+            raise ImportError("ollama package not installed. Run: pip install ollama")
 
     def check_connection(self) -> bool:
-        """
-        Check if Ollama is running and the model is available.
-
-        Returns:
-            True if connection is successful, False otherwise.
-        """
+        """Check if backend is available."""
         try:
-            models = self.client.list()
-            available_models = [m.model.split(":")[0] for m in models.models]
-            if self.model not in available_models:
-                logger.warning(
-                    f"Model '{self.model}' not found. Available: {available_models}"
+            if self.backend == "groq":
+                # Quick test call
+                self._client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=5,
                 )
-                logger.info(f"Run: ollama pull {self.model}")
-                return False
-            return True
+                return True
+            else:
+                models = self._client.list()
+                available = [m.model.split(":")[0] for m in models.models]
+                return self.model in available
         except Exception as e:
-            logger.error(f"Failed to connect to Ollama: {e}")
+            logger.error(f"Connection check failed: {e}")
             return False
 
-    def correct_sequence(
-        self,
-        letters: list[str],
-        context: str | None = None,
-    ) -> CorrectionResult:
-        """
-        Correct a sequence of letters to form Spanish word(s).
-
-        Args:
-            letters: List of recognized letters (e.g., ["h", "o", "l", "a"])
-            context: Optional context to help with correction
-
-        Returns:
-            CorrectionResult with corrected text and confidence
-        """
+    def correct_sequence(self, letters: list[str]) -> CorrectionResult:
+        """Correct letter sequence to Spanish word."""
         if not letters:
-            return CorrectionResult(
-                original=[],
-                corrected="",
-                confidence="low",
-                #explanation="Empty input sequence",
-            )
+            return CorrectionResult([], "", "low")
 
-        # Format letters for prompt
         letters_str = " ".join([l.upper() for l in letters])
-        prompt = self.prompt_template.format(letters=letters_str)
-
-        if context:
-            prompt += f"\n\nContexto adicional: {context}"
+        prompt = FAST_PROMPT.format(letters=letters_str)
 
         try:
-            response = self.client.chat(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.1},  # Low temperature for more consistent results
-            )
+            if self.backend == "groq":
+                response = self._call_groq(prompt)
+            else:
+                response = self._call_ollama(prompt)
 
-            # Parse response
-            response_text = response["message"]["content"].strip()
-            result = self._parse_response(response_text, letters)
-
-            logger.info(
-                f"Corrected '{letters_str}' -> '{result.corrected}' "
-                f"(confidence: {result.confidence})"
-            )
-
-            return result
+            return self._parse_response(response, letters)
 
         except Exception as e:
-            logger.error(f"LLM correction failed: {e}")
-            # Fallback: return concatenated letters
-            return CorrectionResult(
-                original=letters,
-                corrected="".join(letters),
-                confidence="low",
-                #explanation=f"LLM error: {str(e)}",
-            )
+            logger.error(f"Correction failed: {e}")
+            return CorrectionResult(letters, "".join(letters), "low")
 
-    def _parse_response(
-        self,
-        response_text: str,
-        original_letters: list[str],
-    ) -> CorrectionResult:
-        """Parse LLM response into CorrectionResult."""
+    def _call_groq(self, prompt: str) -> str:
+        """Call Groq API."""
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=50,
+        )
+        return response.choices[0].message.content.strip()
+
+    def _call_ollama(self, prompt: str) -> str:
+        """Call Ollama API."""
+        response = self._client.chat(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.1},
+        )
+        return response["message"]["content"].strip()
+
+    def _parse_response(self, response: str, original: list[str]) -> CorrectionResult:
+        """Parse LLM response."""
         try:
-            # Try to extract JSON from response
-            # Handle cases where model adds extra text
-            json_start = response_text.find("{")
-            json_end = response_text.rfind("}") + 1
-
-            if json_start != -1 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                data = json.loads(json_str)
-
-                corrected = data.get("corrected", "".join(original_letters))
+            # Extract JSON
+            start = response.find("{")
+            end = response.rfind("}") + 1
+            if start != -1 and end > start:
+                data = json.loads(response[start:end])
+                corrected = data.get("corrected", "".join(original))
                 confidence = data.get("confidence", "medium")
-                #explanation = data.get("explanation")
-
-                # Validate confidence value
                 if confidence not in ["high", "medium", "low"]:
                     confidence = "medium"
-
-                return CorrectionResult(
-                    original=original_letters,
-                    corrected=corrected,
-                    confidence=confidence,
-                    #explanation=explanation,
-                )
-
+                return CorrectionResult(original, corrected, confidence)
         except json.JSONDecodeError:
-            logger.warning(f"Failed to parse JSON from response: {response_text}")
+            pass
 
-        # Fallback: try to extract just the word
-        # If response is simple text, use it as corrected word
-        clean_response = response_text.strip().strip('"').strip("'")
-        if clean_response and len(clean_response) < 50:
-            return CorrectionResult(
-                original=original_letters,
-                corrected=clean_response,
-                confidence="low",
-                #explanation="Could not parse structured response",
-            )
+        # Fallback: use response as word if short
+        clean = response.strip().strip('"').strip("'")
+        if clean and len(clean) < 30:
+            return CorrectionResult(original, clean, "low")
 
-        # Last resort: return original letters joined
-        return CorrectionResult(
-            original=original_letters,
-            corrected="".join(original_letters),
-            confidence="low",
-            #explanation="Failed to get valid response from LLM",
-        )
-
-    def correct_batch(
-        self,
-        sequences: list[list[str]],
-    ) -> list[CorrectionResult]:
-        """
-        Correct multiple sequences.
-
-        Args:
-            sequences: List of letter sequences
-
-        Returns:
-            List of CorrectionResult objects
-        """
-        return [self.correct_sequence(seq) for seq in sequences]
+        return CorrectionResult(original, "".join(original), "low")
 
 
 def main():
-    """Quick test of the corrector."""
-    logging.basicConfig(level=logging.INFO)
+    """Quick test."""
+    import time
+    
+    print("Testing SignLanguageCorrector")
+    print("=" * 50)
+    
+    # Try Groq first, fallback to Ollama
+    try:
+        corrector = SignLanguageCorrector(backend="groq")
+        print(f"Using Groq ({corrector.model})")
+    except Exception as e:
+        print(f"Groq not available: {e}")
+        corrector = SignLanguageCorrector(backend="ollama")
+        print(f"Using Ollama ({corrector.model})")
 
-    print("=" * 60)
-    print("Sign Language Corrector Test")
-    print("=" * 60)
-
-    corrector = SignLanguageCorrector(model="llama3.2")
-
-    # Check connection
-    if not corrector.check_connection():
-        print("\nOllama not running or model not available.")
-        print("Start Ollama and run: ollama pull llama3.2")
-        return
-
-    # Test sequences
-    test_sequences = [
-        ["h", "o", "l", "a"],           # hola
-        ["c", "a", "s", "a"],           # casa
-        ["g", "r", "a", "c", "i", "a", "s"],  # gracias
-        ["h", "o", "l", "l", "a"],      # hola (with typo)
-        ["c", "o", "m", "o"],           # como
-        ["b", "i", "e", "n"],           # bien
+    tests = [
+        ["h", "o", "l", "a"],
+        ["c", "a", "s", "a"],
+        ["m", "a", "n", "o"],
     ]
 
-    print("\nTesting corrections:")
-    print("-" * 60)
-
-    for seq in test_sequences:
-        result = corrector.correct_sequence(seq)
-        print(f"Input:  {' '.join([l.upper() for l in seq])}")
-        print(f"Output: {result.corrected} ({result.confidence})")
-        #if result.explanation:
-        #    print(f"Note:   {result.explanation}")
-        print("-" * 60)
+    for letters in tests:
+        start = time.time()
+        result = corrector.correct_sequence(letters)
+        latency = time.time() - start
+        print(f"{' '.join(letters):15} -> {result.corrected:10} ({latency:.2f}s)")
 
 
 if __name__ == "__main__":
     main()
-

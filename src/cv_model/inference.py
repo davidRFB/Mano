@@ -509,23 +509,39 @@ def main(
     print("=" * 60)
 
     # Initialize LLM corrector (optional)
+    # Try Groq first (fast ~100ms), fallback to Ollama (slow ~5s)
     corrector = None
     if not disable_llm and LLM_AVAILABLE:
-        model_name = llm_model or DEFAULT_LLM_MODEL
+        # Try Groq first (requires GROQ_API_KEY env var)
         try:
-            corrector = SignLanguageCorrector(model=model_name)
+            corrector = SignLanguageCorrector(backend="groq")
             if corrector.check_connection():
-                print(f"LLM corrector initialized: {model_name}")
+                print(f"LLM corrector: Groq ({corrector.model}) - fast mode")
             else:
-                print(f"LLM model '{model_name}' not available. Run: ollama pull {model_name}")
                 corrector = None
-        except Exception as e:
-            logger.warning(f"Failed to initialize LLM corrector: {e}")
+        except Exception:
             corrector = None
+
+        # Fallback to Ollama
+        if corrector is None:
+            try:
+                model_name = llm_model or DEFAULT_LLM_MODEL
+                corrector = SignLanguageCorrector(backend="ollama", model=model_name)
+                if corrector.check_connection():
+                    print(f"LLM corrector: Ollama ({model_name}) - local mode")
+                else:
+                    print(f"Ollama model '{model_name}' not available. Run: ollama pull {model_name}")
+                    corrector = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize LLM corrector: {e}")
+                corrector = None
+
+        if corrector is None:
+            print("No LLM backend available. Set GROQ_API_KEY or start Ollama.")
     elif not LLM_AVAILABLE:
-        print("LLM corrector not available (ollama package not installed)")
+        print("LLM corrector not available (install groq or ollama)")
     elif disable_llm:
-        print("LLM corrector disabled by user")
+        print("LLM corrector disabled")
 
     # Determine how to load the model
     if model_path:
