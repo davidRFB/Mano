@@ -1,65 +1,92 @@
 ---
-title: "Project Kickoff: Building a Sign Language Translator"
-description: "Why I started MANO and the initial setup for translating Colombian Sign Language"
+title: "Experiment 1: Initial Dataset and Baseline Model"
+description: "Data collection, model selection, and first training results"
 author: "MANO Team"
-date: "2025-11-27"
-categories: [setup, planning]
-image: "../../figures/01-project-overview.png"
+date: "2024-11-27"
+categories: [data, training, baseline]
+image: "../../figures/v1_dataset_histogram.png"
 ---
 
-## The Problem
+## Objective
 
-Communication barriers affect millions of deaf and hard-of-hearing people worldwide. In Colombia, the deaf community uses **Lengua de Señas Colombiana (LSC)** - Colombian Sign Language. While there are interpreters and learning resources, real-time translation technology is still limited.
+Establish a baseline gesture recognition system for the 26 LSC alphabet letters using transfer learning.
 
-## The Vision
+## Data Collection
 
-Build an open-source tool that:
+### Method
 
-1. Uses a simple webcam to capture hand gestures
-2. Recognizes LSC alphabet letters in real-time
-3. Uses LLMs to correct letter sequences into meaningful words
-4. Runs fast enough for actual conversations
+Built a capture tool using MediaPipe for hand detection:
 
-## Initial Setup
+- Press a letter key (a-z) to capture that gesture
+- MediaPipe detects 21 hand landmarks
+- Auto-crop to hand region with padding
+- Save only when hand is detected
 
-### Data Collection
+### Dataset Statistics (V1)
 
-I built a simple capture tool using MediaPipe for hand detection:
+| Metric | Value |
+|--------|-------|
+| Total images | 1,871 |
+| Classes | 26 (a-z) |
+| Min per class | 46 |
+| Max per class | 129 |
+| Image size | 224×224 |
 
-```python
-# Key features of capture_data.py
-- Press any letter (a-z) to capture that gesture
-- MediaPipe detects and tracks 21 hand landmarks
-- Auto-crops to hand region with padding
-- Only saves when hand is detected
-```
+![Class distribution showing imbalance](../../figures/v1_dataset_histogram.png)
 
-First capture session: **1,871 images** across all 26 letters.
+The dataset shows moderate class imbalance with a 2.8× ratio between the most and least represented classes.
 
-### Model Choice
+## Model Selection
 
-Started with **MobileNetV2** because:
+Selected **MobileNetV2** for the baseline:
 
 - Pretrained on ImageNet (transfer learning)
-- Lightweight enough for real-time inference
-- Good accuracy on similar gesture recognition tasks
+- 3.4M parameters (suitable for real-time inference)
+- Proven performance on similar gesture recognition tasks
 
-### Experiment Tracking
+### Training Configuration
 
-Set up **MLflow** to track:
+```python
+model = mobilenet_v2(pretrained=True)
+model.classifier[1] = nn.Linear(1280, 26)
 
-- Training hyperparameters
-- Metrics per epoch
-- Model checkpoints
+optimizer = AdamW(lr=1e-3, weight_decay=1e-4)
+scheduler = CosineAnnealingLR(T_max=30)
+batch_size = 32
+epochs = 30
+```
 
-## What's Next
+## Results
 
-The first model achieved 100% test accuracy... which is suspicious. Next post will dive into why that's actually a problem and what we found.
+### Training Metrics
+
+| Metric | Value |
+|--------|-------|
+| Final Train Accuracy | 100% |
+| Final Val Accuracy | 100% |
+| Test Accuracy | 100% |
+| Early Stopping Epoch | 10 |
+
+### Observations
+
+1. **Rapid convergence**: Model reached 100% validation accuracy by epoch 10
+2. **No generalization gap**: Train and val curves overlap perfectly
+3. **Perfect test accuracy**: All test samples classified correctly
+
+## Issues Identified
+
+The results are suspiciously good. Potential problems:
+
+1. **Near-duplicate images**: Capture rate was ~12 images/second, creating highly correlated samples
+2. **Random split leakage**: Near-duplicates likely present in all splits (train/val/test)
+3. **Limited variation**: Single capture session, same background, lighting
+
+## Next Steps
+
+- Analyze image similarity between consecutive captures
+- Implement temporal splitting to prevent leakage
+- Expand dataset with more diverse conditions
 
 ---
 
-*This is the beginning of the MANO journey. Follow along!*
-
-
-
-
+**Conclusion**: The baseline achieves perfect accuracy on the test set, but this is likely due to data leakage rather than genuine generalization. Further investigation needed.

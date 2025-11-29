@@ -1,13 +1,12 @@
 ---
-title: "All Posts"
+title: "Experiments"
 listing:
   contents: posts
   sort: "date desc"
   type: default
   categories: true
-  fields: [date, title, description, categories]
 ---
 
+## Experiment Log
 
-
-
+Chronological record of experiments, findings, and iterations.

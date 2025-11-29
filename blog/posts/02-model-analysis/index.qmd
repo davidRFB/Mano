@@ -1,124 +1,147 @@
 ---
-title: "When 100% Accuracy is a Red Flag"
-description: "Diagnosing why our model aces the test set but fails in real-world inference"
+title: "Experiment 2: Data Leakage Analysis and Model Diagnostics"
+description: "Investigating why 100% test accuracy fails in real-world inference"
 author: "MANO Team"
-date: "2025-11-27"
-categories: [analysis, debugging, ml]
+date: "2024-11-27"
+categories: [analysis, debugging, data-quality]
 image: "../../figures/02-training-curves.png"
 ---
 
-## The Problem
+## Problem Statement
 
-Our MobileNetV2 model achieved **100% test accuracy**. Sounds great, right?
+The model trained in Experiment 1 achieved 100% test accuracy but performed poorly during live webcam inference:
 
-But when we ran real-time inference with a webcam, predictions were:
+- Low confidence scores (30-50%)
+- Frequent misclassifications
+- Inconsistent predictions frame-to-frame
 
-- Low confidence (30-50%)
-- Often wrong
-- Inconsistent frame to frame
+This experiment investigates the root cause.
 
-Something was very wrong.
+## Analysis 1: Training Dynamics
 
-## Investigation
+![Training curves showing immediate convergence](../../figures/02-training-curves.png)
 
-We dug into the data and model to find the root cause.
+### Observations
 
-### 1. Data Leakage: Near-Duplicate Images
+- Both train and val accuracy reach ~100% within 5-10 epochs
+- No visible generalization gap
+- Loss drops to near-zero quickly
 
-Our capture script was running at **12+ images per second**. That means consecutive images are nearly identical:
+**Interpretation**: This pattern suggests the model is memorizing rather than learning generalizable features.
 
-![Consecutive captures are almost identical](../../figures/02-consecutive-images.png)
+## Analysis 2: Image Similarity
 
-When we randomly split train/val/test, near-duplicates ended up in all three sets. The model wasn't learning gestures—it was memorizing specific frames.
+### Consecutive Image Correlation
 
-**Evidence**: Correlation between consecutive images was >0.95
+Measured pixel correlation between consecutive captures:
 
-### 2. Class Imbalance
+| Letter | Mean Correlation | Interpretation |
+|--------|-----------------|----------------|
+| A | 0.94 | High similarity |
+| T | 0.92 | High similarity |
+| B | 0.91 | High similarity |
 
-Not all letters had equal representation:
+Correlation >0.9 indicates near-duplicate images. With random train/val/test splits, these duplicates leak across all sets.
 
-![Class distribution](../../figures/02-class-distribution.png)
+### Capture Rate Analysis
 
-| Statistic | Value |
-|-----------|-------|
-| Min images | 46 (B) |
-| Max images | 129 (T) |
-| Imbalance ratio | 2.8x |
+```
+Average capture rate: 12.3 images/second
+Time span per letter: ~10 seconds
+Result: ~120 nearly identical images per gesture
+```
 
-Letter T had the most samples—and coincidentally worked best during inference.
+## Analysis 3: Robustness Testing
 
-### 3. Training Curves Tell the Story
+Tested model on augmented versions of training images:
 
-![Training curves](../../figures/02-training-curves.png)
+| Augmentation | Accuracy | Confidence |
+|--------------|----------|------------|
+| Original | 100% | 98-100% |
+| Brightness +30% | 99% | 95-99% |
+| Brightness -30% | 98% | 90-98% |
+| Gaussian blur σ=2 | 72% | 40-70% |
+| Color shift +20° | 65% | 30-60% |
 
-Both train and validation accuracy hit 100% almost immediately. Classic sign of:
+**Finding**: Model is sensitive to blur and color variations—common in real webcam conditions.
 
-- Data leakage
-- Model memorizing rather than generalizing
+## Analysis 4: Confusion Matrix
 
-### 4. Inference Robustness Test
+![Confusion matrix showing perfect diagonal](../../figures/02-confusion-matrix.png)
 
-We tested the model on augmented versions of training images:
+The confusion matrix shows perfect classification on the test set, but this is misleading due to the data leakage issue.
 
-| Condition | Letter T | Letter A | Letter B |
-|-----------|----------|----------|----------|
-| Original | 98.7% ✅ | 100% ✅ | 99.6% ✅ |
-| Bright | 97.6% ✅ | 100% ✅ | 99.4% ✅ |
-| Dark | 96.1% ✅ | 99.4% ✅ | 99.2% ✅ |
-| Blurred | 44.6% ⚠️ | 99.3% ✅ | 97.7% ✅ |
-| Color Shift | 38.0% ❌ | 94.3% ✅ | 83.8% ⚠️ |
+## Root Cause Summary
 
-The model struggles with blur and color changes—exactly what happens in real webcam conditions.
+| Issue | Impact | Evidence |
+|-------|--------|----------|
+| Fast capture rate | Near-duplicate images | Correlation >0.9 |
+| Random splitting | Leakage across sets | Perfect test accuracy |
+| Single session | Limited variation | Poor augmentation robustness |
+| Same background | Spurious correlations | Live inference failures |
 
-## Root Causes
+## Corrective Actions
 
-1. **Near-duplicate images** from fast capture rate
-2. **Random splits** caused data leakage
-3. **Limited variation** in training data (single session, same background)
-4. **Distribution shift** between training images and live webcam
+### 1. Data Collection Protocol
 
-## The Fix (Next Steps)
-
-### Data Collection
-- Slower capture rate (1-2 img/sec max)
+- Reduce capture rate to 1-2 images/second
 - Multiple sessions with varied conditions
 - Different backgrounds, lighting, hand positions
 
-### Data Splitting  
-- **Temporal splits**: Keep all images from one session together
-- Prevents near-duplicates from leaking across sets
+### 2. Data Splitting Strategy
 
-### Augmentation
-- Stronger augmentation during training
-- Random blur, brightness, color shifts
-- Better prepares model for real-world variation
+Changed from random to temporal splitting:
 
-### Dataset Versioning
-We set up **DVC** to track data versions:
+```python
+# Before: Random split (causes leakage)
+train, val, test = random_split(dataset, [0.7, 0.15, 0.15])
+
+# After: Temporal split (prevents leakage)
+# All images from one session stay together
+```
+
+### 3. Augmentation Pipeline
+
+Added stronger augmentation during training:
+
+```python
+transforms.Compose([
+    RandomHorizontalFlip(p=0.3),
+    RandomRotation(degrees=15),
+    RandomAffine(translate=(0.1, 0.1), scale=(0.9, 1.1)),
+    ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
+    GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
+])
+```
+
+### 4. Dataset Versioning
+
+Implemented DVC for data tracking:
 
 ```bash
 dvc add data/raw
 dvc push
-git commit -m "Data v1: initial capture"
+git commit -m "Data v1: initial capture (has leakage issues)"
 ```
 
-Now we can:
+## Expanded Dataset (V2)
 
-- Track data evolution
-- Compare models trained on different data versions
-- Roll back if needed
+After implementing corrective actions:
 
-## Lessons Learned
+| Metric | V1 | V2 |
+|--------|----|----|
+| Total images | 1,871 | 3,658 |
+| Capture sessions | 1 | 4 |
+| Backgrounds | 1 | 3 |
+| Capture rate | 12/sec | 1-2/sec |
 
-1. **High accuracy can be misleading** - always test on realistic conditions
-2. **Data quality > data quantity** - 1,871 near-duplicate images aren't better than 500 diverse ones
-3. **Capture rate matters** - fast capture creates correlation problems
-4. **Version your data** - just as important as versioning code
+## Conclusions
+
+1. **High test accuracy can be misleading** when data quality issues cause leakage
+2. **Capture rate matters**: Fast capture creates temporal correlation
+3. **Temporal splitting is essential** for time-series-like data
+4. **Robustness testing** reveals generalization failures before deployment
 
 ---
 
-*Next: Capturing better data and training v2 of the model.*
-
-
-
-
+**Next**: Hyperparameter optimization on the expanded V2 dataset.

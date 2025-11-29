@@ -3,23 +3,23 @@ project:
   output-dir: _site
 
 website:
-  title: "MANO - Building a Sign Language Translator"
-  description: "A journey through building a Colombian Sign Language (LSC) translator using computer vision and LLMs"
+  title: "MANO - Research Notes"
+  description: "Technical notes on building a Colombian Sign Language classifier"
   
   navbar:
     background: "#1a1a2e"
     foreground: "#eaeaea"
     left:
       - href: index.qmd
-        text: Home
+        text: Overview
       - href: posts.qmd
-        text: Posts
+        text: Experiments
     right:
       - icon: github
-        href: https://github.com/YOUR_USERNAME/mano
+        href: https://github.com/davidrfb/Mano
   
   page-footer:
-    center: "MANO Project - Colombian Sign Language Translator"
+    center: "MANO - Colombian Sign Language Recognition"
     background: "#1a1a2e"
 
 format:
@@ -35,7 +35,3 @@ format:
 
 execute:
   freeze: auto
-
-
-
-
