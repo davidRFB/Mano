@@ -233,6 +233,110 @@ def denormalize(tensor: torch.Tensor) -> torch.Tensor:
     return tensor * std + mean
 
 
+def save_preprocessed_tensors(
+    data_dir: Path = DATA_DIR,
+    output_path: str = "./data/processed/tensors.pth",
+    image_size: int = IMAGE_SIZE,
+    seed: int = RANDOM_SEED,
+) -> None:
+    """
+    Preprocess all images and save as tensors for fast loading in Colab.
+    
+    Saves: {
+        'train_images': Tensor, 'train_labels': Tensor,
+        'val_images': Tensor, 'val_labels': Tensor,
+        'test_images': Tensor, 'test_labels': Tensor,
+        'classes': list, 'num_classes': int
+    }
+    """
+    print("Preprocessing dataset and saving tensors...")
+    
+    # Create dataset with val transforms (no augmentation for saved tensors)
+    transform = get_val_transforms(image_size)
+    dataset = LSCDataset(data_dir=data_dir, transform=transform)
+    
+    # Get splits
+    train_idx, val_idx, test_idx = split_dataset(dataset, seed=seed)
+    
+    def extract_tensors(indices: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
+        images = []
+        labels = []
+        for idx in indices:
+            img, label = dataset[idx]
+            images.append(img)
+            labels.append(label)
+        return torch.stack(images), torch.tensor(labels)
+    
+    print("Extracting train tensors...")
+    train_images, train_labels = extract_tensors(train_idx)
+    print("Extracting val tensors...")
+    val_images, val_labels = extract_tensors(val_idx)
+    print("Extracting test tensors...")
+    test_images, test_labels = extract_tensors(test_idx)
+    
+    data = {
+        'train_images': train_images,
+        'train_labels': train_labels,
+        'val_images': val_images,
+        'val_labels': val_labels,
+        'test_images': test_images,
+        'test_labels': test_labels,
+        'classes': dataset.classes,
+        'num_classes': dataset.num_classes,
+    }
+    
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    torch.save(data, output_path)
+    
+    print(f"\n✓ Saved preprocessed tensors to {output_path}")
+    print(f"  Train: {train_images.shape}, Val: {val_images.shape}, Test: {test_images.shape}")
+    print(f"  File size: {Path(output_path).stat().st_size / 1024 / 1024:.1f} MB")
+
+
+def load_preprocessed_tensors(
+    tensor_path: str,
+    batch_size: int = BATCH_SIZE,
+    num_workers: int = NUM_WORKERS,
+) -> tuple[DataLoader, DataLoader, DataLoader, int, list[str]]:
+    """
+    Load preprocessed tensors and create DataLoaders.
+    
+    Returns:
+        Tuple of (train_loader, val_loader, test_loader, num_classes, class_names)
+    """
+    from torch.utils.data import TensorDataset
+    
+    print(f"Loading preprocessed tensors from {tensor_path}...")
+    data = torch.load(tensor_path, weights_only=False)
+    
+    train_dataset = TensorDataset(data['train_images'], data['train_labels'])
+    val_dataset = TensorDataset(data['val_images'], data['val_labels'])
+    test_dataset = TensorDataset(data['test_images'], data['test_labels'])
+    
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True
+    )
+    test_loader = DataLoader(
+        test_dataset, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True
+    )
+    
+    print(f"✓ Loaded {len(train_dataset)} train, {len(val_dataset)} val, {len(test_dataset)} test samples")
+    
+    return (
+        train_loader,
+        val_loader,
+        test_loader,
+        data['num_classes'],
+        data['classes'],
+    )
+
+
 if __name__ == "__main__":
     # Test the preprocessing pipeline
     print("Testing preprocessing pipeline...")
@@ -251,9 +355,10 @@ if __name__ == "__main__":
         print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
 
         print("\n✓ Preprocessing pipeline working correctly!")
-        #Saving the dataloaders in "./data/processed/dataloaders.pth"
-        torch.save((train_loader, val_loader, test_loader), "./data/processed/dataloaders.pth")
-        print(f"Dataloaders saved to './data/processed/dataloaders.pth'")
+        
+        # Save preprocessed tensors for fast Colab loading
+        save_preprocessed_tensors(output_path="./data/processed/tensors.pth")
+        
     except ValueError as e:
         print(f"\n✗ Error: {e}")
 

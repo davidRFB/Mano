@@ -257,7 +257,8 @@ def train(
         )
 
         # Training loop
-        best_val_acc = 0.0
+        best_val_loss = float("inf")  # Track loss (lower is better)
+        best_val_acc = 0.0  # Still track for reporting
         epochs_without_improvement = 0
         best_checkpoint_name = None
 
@@ -301,21 +302,22 @@ def train(
                 f"Time: {elapsed:.1f}s"
             )
 
-            # Save best model to MLflow
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+            # Save best model to MLflow (based on validation LOSS - lower is better)
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_val_acc = val_acc  # Track best acc at best loss
                 epochs_without_improvement = 0
                 best_checkpoint_name = save_checkpoint_to_mlflow(
                     model, optimizer, epoch, val_acc, model_name, classes
                 )
-                print(f"  ↳ New best! Saved to MLflow: {best_checkpoint_name}")
+                print(f"  ↳ New best! (loss: {val_loss:.4f}) Saved to MLflow")
             else:
                 epochs_without_improvement += 1
 
-            # Early stopping
+            # Early stopping (based on validation loss)
             if epochs_without_improvement >= patience:
                 print(
-                    f"\nEarly stopping at epoch {epoch} (no improvement for {patience} epochs)"
+                    f"\nEarly stopping at epoch {epoch} (val_loss not improving for {patience} epochs)"
                 )
                 mlflow.log_param("early_stopped_epoch", epoch)
                 break
@@ -330,6 +332,7 @@ def train(
         # Log final metrics
         mlflow.log_metrics(
             {
+                "best_val_loss": best_val_loss,
                 "best_val_acc": best_val_acc,
                 "test_loss": test_loss,
                 "test_acc": test_acc,
@@ -347,7 +350,9 @@ def train(
         run_id = mlflow.active_run().info.run_id
 
         print("\n" + "=" * 60)
-        print(f"Training complete! Best validation accuracy: {best_val_acc:.4f}")
+        print(f"Training complete!")
+        print(f"Best validation loss: {best_val_loss:.4f}")
+        print(f"Best validation accuracy: {best_val_acc:.4f}")
         print(f"Test accuracy: {test_acc:.4f}")
         print(f"MLflow experiment: {experiment_name}")
         print(f"MLflow run ID: {run_id}")
