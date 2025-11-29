@@ -9,6 +9,16 @@ Format: `## [Version] - YYYY-MM-DD`
 ## [Unreleased]
 
 ### Added
+- **LLM word correction** for sign language letter sequences
+  - `src/llm/corrector.py` - Fast Spanish word correction
+  - Groq backend (default, ~100-200ms latency, free API)
+  - Ollama backend (local fallback, ~5-10s latency)
+  - Auto-loads `.env` for API keys
+- **Letter capture in inference** with dual modes
+  - Manual capture (SPACE key)
+  - Auto-capture when letter stable for 0.5s
+  - Buffer management (BACKSPACE, C to clear)
+  - ENTER triggers LLM correction
 - **DVC data versioning** for reproducible experiments
   - Configured Google Drive as remote storage (`G:\My Drive\dvc-storage\mano`)
   - `data/raw/` tracked as v1 (1,871 images, 26 letters)

@@ -40,6 +40,15 @@ except ImportError:
     LLM_AVAILABLE = False
     SignLanguageCorrector = None
 
+# Fast autocomplete (no LLM)
+try:
+    from src.llm.autocomplete import get_autocomplete, deduplicate_letters
+    AUTOCOMPLETE_AVAILABLE = True
+except ImportError:
+    AUTOCOMPLETE_AVAILABLE = False
+    get_autocomplete = None
+    deduplicate_letters = lambda x: x
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,8 +60,8 @@ MIN_TRACKING_CONFIDENCE = 0.5
 CROP_PADDING = 50
 
 # Letter capture configuration
-STABILITY_THRESHOLD = 10  # Frames before auto-capture (~0.5s at 30fps)
-MIN_CAPTURE_CONFIDENCE = 0.4  # Minimum confidence for capture
+STABILITY_THRESHOLD = 3  # Frames before auto-capture (~0.5s at 30fps)
+MIN_CAPTURE_CONFIDENCE = 0.25  # Minimum confidence for capture
 
 # LLM configuration
 DEFAULT_LLM_MODEL = "llama3.2"
@@ -351,6 +360,8 @@ def draw_overlay(
     prediction: str | None,
     confidence: float | None,
     letter_buffer: list[str] | None = None,
+    deduped_word: str | None = None,
+    suggestions: list[str] | None = None,
     corrected_text: str | None = None,
     stability_progress: float = 0.0,
 ) -> None:
@@ -454,43 +465,69 @@ def draw_overlay(
                 -1,
             )
 
-    # Bottom panel for letter buffer and corrected text
-    bottom_panel_y = h - 100
+    # Bottom panel for letter buffer, suggestions, and corrected text
+    bottom_panel_y = h - 120
     cv2.rectangle(frame, (0, bottom_panel_y), (w, h), (40, 40, 40), -1)
 
-    # Letter buffer display
-    buffer_text = "Buffer: " + " ".join([l.upper() for l in (letter_buffer or [])])
-    if not letter_buffer:
-        buffer_text = "Buffer: (empty - show hand gestures to capture)"
+    # Word display (deduped)
+    if deduped_word:
+        word_text = f"Word: {deduped_word.upper()}"
+    elif letter_buffer:
+        word_text = "Word: " + "".join([l.upper() for l in letter_buffer])
+    else:
+        word_text = "Word: (show gestures to spell)"
 
     cv2.putText(
         frame,
-        buffer_text,
-        (10, bottom_panel_y + 30),
+        word_text,
+        (10, bottom_panel_y + 25),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
         (255, 255, 0),
         2,
     )
 
-    # Corrected text display
+    # Suggestions display (instant autocomplete)
+    if suggestions:
+        suggestions_text = "Suggestions: " + " | ".join(suggestions[:5])
+        cv2.putText(
+            frame,
+            suggestions_text,
+            (10, bottom_panel_y + 55),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 255),
+            2,
+        )
+    else:
+        cv2.putText(
+            frame,
+            "Suggestions: (type more letters)",
+            (10, bottom_panel_y + 55),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (150, 150, 150),
+            1,
+        )
+
+    # Corrected text display (from LLM)
     if corrected_text:
         cv2.putText(
             frame,
-            f"Corrected: {corrected_text}",
-            (10, bottom_panel_y + 70),
+            f"LLM: {corrected_text}",
+            (10, bottom_panel_y + 90),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
+            0.7,
             (0, 255, 0),
             2,
         )
     else:
         cv2.putText(
             frame,
-            "Press ENTER to correct word",
-            (10, bottom_panel_y + 70),
+            "ENTER: LLM correct | 1-5: pick suggestion",
+            (10, bottom_panel_y + 90),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
+            0.45,
             (150, 150, 150),
             1,
         )
@@ -604,6 +641,13 @@ def main(
     # Letter buffer state
     letter_buffer: list[str] = []
     corrected_text: str | None = None
+    suggestions: list[str] = []
+
+    # Initialize autocomplete
+    autocomplete = None
+    if AUTOCOMPLETE_AVAILABLE:
+        autocomplete = get_autocomplete()
+        print(f"Autocomplete loaded: {autocomplete.word_count} words")
 
     # Stability tracking for auto-capture
     stability_counter = 0
@@ -685,12 +729,22 @@ def main(
         stability_progress = min(stability_counter / STABILITY_THRESHOLD, 1.0)
 
         # Draw overlay with buffer
+        # Compute deduped word and suggestions
+        deduped_word = ""
+        if letter_buffer:
+            deduped_letters = deduplicate_letters(letter_buffer)
+            deduped_word = "".join(deduped_letters)
+            if autocomplete and deduped_word:
+                suggestions = autocomplete.suggest(deduped_word, max_results=5)
+
         draw_overlay(
             frame,
             hand_detected,
             current_prediction,
             current_confidence,
             letter_buffer,
+            deduped_word,
+            suggestions,
             corrected_text,
             stability_progress,
         )
@@ -730,22 +784,30 @@ def main(
 
         elif key == 13:  # ENTER - trigger LLM correction
             if letter_buffer:
-                print(f"[CORRECT] Sending to LLM: {' '.join([l.upper() for l in letter_buffer])}")
+                deduped = deduplicate_letters(letter_buffer)
+                print(f"[CORRECT] Sending to LLM: {''.join(deduped).upper()}")
                 if corrector:
                     try:
-                        result = corrector.correct_sequence(letter_buffer)
+                        result = corrector.correct_sequence(deduped)
                         corrected_text = result.corrected
                         print(f"[RESULT] {corrected_text} (confidence: {result.confidence})")
-                        #if result.explanation:
-                        #    print(f"[NOTE] {result.explanation}")
                     except Exception as e:
                         logger.error(f"LLM correction failed: {e}")
                         corrected_text = f"(Error: {str(e)[:30]})"
                 else:
-                    corrected_text = "".join(letter_buffer)  # Fallback: just join letters
-                    print(f"[FALLBACK] No LLM available, joined letters: {corrected_text}")
+                    corrected_text = "".join(deduped)  # Fallback: just join letters
+                    print(f"[FALLBACK] No LLM available: {corrected_text}")
             else:
                 print("[SKIP] Buffer is empty, nothing to correct")
+
+        # Keys 1-5: Pick suggestion
+        elif key in [ord("1"), ord("2"), ord("3"), ord("4"), ord("5")]:
+            idx = key - ord("1")  # 0-4
+            if suggestions and idx < len(suggestions):
+                corrected_text = suggestions[idx]
+                print(f"[PICK] Selected suggestion: {corrected_text}")
+                letter_buffer.clear()
+                suggestions = []
 
     # Cleanup
     hands.close()

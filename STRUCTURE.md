@@ -20,6 +20,9 @@ Mano/
 │   ├── posts/              # Blog posts (polished notebooks)
 │   │   ├── 01-project-kickoff/
 │   │   ├── 02-model-analysis/
+│   │   ├── 03-hyperparameter-optimization/
+│   │   ├── 04-landmark-experiment/
+│   │   ├── 05-word-correction/
 │   │   └── ...
 │   └── figures/            # All blog figures (ordered naming)
 │       ├── 01-class-distribution.png
@@ -35,7 +38,9 @@ Mano/
 │   └── *.pth               # Model weights (gitignored)
 ├── notebooks/              # Working Jupyter notebooks (exploratory)
 │   ├── 01_data_analysis.ipynb
-│   └── 02_model_analysis.ipynb
+│   ├── 02_model_analysis.ipynb
+│   ├── 05_landmark_comparison.ipynb
+│   └── 06_llm_correction.ipynb
 ├── scripts/                # Utility scripts
 │   └── capture_data.py     # Data collection tool
 ├── src/
@@ -45,7 +50,9 @@ Mano/
 │   │   ├── train.py        # Training loop with MLflow
 │   │   └── inference.py    # Real-time prediction
 │   ├── api/                # FastAPI application (planned)
-│   ├── llm/                # LLM integration (planned)
+│   ├── llm/                # LLM word correction
+│   │   ├── __init__.py
+│   │   └── corrector.py    # Groq/Ollama Spanish word corrector
 │   └── frontend/           # Streamlit interface (planned)
 ├── tests/                  # Test suite
 ├── docker/                 # Dockerfiles
@@ -141,6 +148,18 @@ quarto render     # Build static site
 - `train.get_model()` - Get pretrained torchvision model
 - `inference.main()` - Run real-time inference
 
+### `src/llm/`
+**Purpose**: LLM-based Spanish word correction
+
+| File | Description |
+|------|-------------|
+| `corrector.py` | SignLanguageCorrector class with Groq/Ollama backends |
+
+**Key functions**:
+- `SignLanguageCorrector(backend="groq")` - Fast cloud API (~100ms)
+- `SignLanguageCorrector(backend="ollama")` - Local model (~5s)
+- `correct_sequence(letters)` - Returns corrected Spanish word
+
 ### `scripts/capture_data.py`
 **Purpose**: Data collection tool
 
@@ -201,8 +220,11 @@ python -m src.cv_model.train --model mobilenet_v2 --epochs 30
 
 ### Run Inference
 ```powershell
-python -m src.cv_model.inference
+python -m src.cv_model.inference --experiment V3_landmarks
 ```
+
+Controls:
+- SPACE: capture letter | BACKSPACE: delete | C: clear | ENTER: correct | ESC: quit
 
 ### Update Data Version
 ```powershell
