@@ -338,12 +338,38 @@ def load_preprocessed_tensors(
 
 
 if __name__ == "__main__":
-    # Test the preprocessing pipeline
-    print("Testing preprocessing pipeline...")
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Preprocess LSC dataset and save tensors for fast loading"
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="./data/raw",
+        help="Path to input data directory (default: ./data/raw)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="./data/processed/tensors.pth",
+        help="Path to output tensor file (default: ./data/processed/tensors.pth)",
+    )
+    parser.add_argument(
+        "--test-only",
+        action="store_true",
+        help="Only test the pipeline, don't save tensors",
+    )
+    args = parser.parse_args()
+
+    data_dir = Path(args.data_dir)
+    print(f"Data directory: {data_dir.absolute()}")
     print("=" * 50)
 
     try:
-        train_loader, val_loader, test_loader, num_classes, classes = create_dataloaders()
+        train_loader, val_loader, test_loader, num_classes, classes = create_dataloaders(
+            data_dir=data_dir
+        )
 
         print(f"\nNum classes: {num_classes}")
         print(f"Classes: {classes}")
@@ -355,10 +381,14 @@ if __name__ == "__main__":
         print(f"Image range: [{images.min():.3f}, {images.max():.3f}]")
 
         print("\n✓ Preprocessing pipeline working correctly!")
-        
-        # Save preprocessed tensors for fast Colab loading
-        save_preprocessed_tensors(output_path="./data/processed/tensors.pth")
-        
+
+        if not args.test_only:
+            # Save preprocessed tensors for fast Colab loading
+            save_preprocessed_tensors(
+                data_dir=data_dir,
+                output_path=args.output,
+            )
+
     except ValueError as e:
         print(f"\n✗ Error: {e}")
 

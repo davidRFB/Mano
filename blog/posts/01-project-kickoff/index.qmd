@@ -67,6 +67,14 @@ epochs = 30
 | Test Accuracy | 100% |
 | Early Stopping Epoch | 10 |
 
+### Sample Data
+
+Here are examples of the captured gesture images:
+
+![Class distribution showing imbalance](../../figures/05-v2-v3-samples.png){width=80%}
+
+The images show cropped hand regions with consistent backgrounds from the single capture session.
+
 ### Observations
 
 1. **Rapid convergence**: Model reached 100% validation accuracy by epoch 10

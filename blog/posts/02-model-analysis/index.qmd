@@ -71,6 +71,14 @@ Tested model on augmented versions of training images:
 
 The confusion matrix shows perfect classification on the test set, but this is misleading due to the data leakage issue.
 
+## Analysis 5: Sample Predictions
+
+Despite 100% test accuracy, the model's predictions reveal issues during robustness testing:
+
+![Sample predictions showing model confidence](../../figures/04-sample-predictions.png)
+
+While predictions on training-like images show high confidence, the model struggles with variations in lighting and blur - conditions common in live webcam inference.
+
 ## Root Cause Summary
 
 | Issue | Impact | Evidence |

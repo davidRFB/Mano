@@ -69,6 +69,14 @@ Observations:
 - **MobileNetV3-Small**: Similar pattern, slightly faster initial learning
 - **EfficientNet-B0**: More training data may help this architecture
 
+## Sample Predictions
+
+The model shows high confidence predictions across letter classes:
+
+![Sample predictions with confidence scores](../../figures/04-sample-predictions.png)
+
+Each prediction shows the true label, predicted label, and confidence score. Green borders indicate correct predictions.
+
 ## Error Analysis
 
 Despite high test accuracy, confusion matrix analysis reveals patterns:
