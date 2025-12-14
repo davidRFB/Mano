@@ -60,9 +60,14 @@ transform = transforms.Compose([
 app = FastAPI(title="LSC-Connect API", version="0.1.0")
 
 # Allow frontend to call API (CORS)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://davidRFB.github.io",  # Your GitHub Pages URL
+        "http://127.0.0.1:5500",         # Localhost (for local testing)
+        "*"                              # OR use "*" to allow everyone (easiest for testing)
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )

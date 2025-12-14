@@ -1,11 +1,13 @@
 ---
-title: MANO
-emoji: 💻
+title: Mano LSC Translator
+emoji: 🤟
 colorFrom: blue
-colorTo: green
+colorTo: indigo
 sdk: docker
+app_port: 7860
 pinned: false
-short_description: Colombian Alphabet Sign Language Translator
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+# Mano LSC Translator
+
+This is the API backend for the Colombian Sign Language Translator.

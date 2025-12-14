@@ -20,11 +20,11 @@ RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Copy and install other requirements
-COPY requirements-docker-cpu.txt .
-RUN pip install --no-cache-dir -r requirements-docker-cpu.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ ./src/
+#COPY src/ ./src/
 
 # Copy ONLY the MLflow data we need:
 # 1. The "0" folder contains MLflow metadata
@@ -34,7 +34,7 @@ COPY src/ ./src/
 # that contains your run_id (587ca0fd066a4a1fbf1a5a26971c3284)
 #
 # UPDATE THE LINE BELOW with your experiment folder name!
-COPY ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284  ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284
+#COPY ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284  ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284
 
 # --- HUGGING FACE SPECIFIC SETTINGS ---
 
