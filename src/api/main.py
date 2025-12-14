@@ -20,9 +20,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from torchvision import transforms
+from pathlib import Path
+import mlflow
 
-# Import from YOUR existing code
-from src.cv_model.inference import load_model_from_mlflow
+# Import model factory (lightweight)
+from src.cv_model.model_factory import get_model
 
 # =============================================================================
 # Configuration
@@ -66,6 +68,50 @@ app.add_middleware(
 )
 
 
+def load_model_safe(run_id: str):
+    """Load model without heavy dependencies (mediapipe/cv2)."""
+    mlruns_dir = Path("models/mlruns")
+    mlflow.set_tracking_uri(f"file:///{mlruns_dir.absolute()}")
+    
+    # Get run info
+    try:
+        run = mlflow.get_run(run_id)
+        params = run.data.params
+        model_name = params.get("model_name", "mobilenet_v2")
+        num_classes = int(params.get("num_classes", 26))
+        classes_list = params.get("classes", "").split(",")
+    except Exception as e:
+        print(f"Error reading MLflow run: {e}")
+        # Fallback defaults
+        model_name = "mobilenet_v2"
+        num_classes = 26
+        classes_list = [chr(i) for i in range(65, 91)]
+
+    # Find checkpoint
+    checkpoint_path = None
+    for exp_dir in mlruns_dir.iterdir():
+        if exp_dir.is_dir() and exp_dir.name not in ["models", ".trash"]:
+            run_dir = exp_dir / run_id / "artifacts" / "checkpoints"
+            if run_dir.exists():
+                checkpoint_files = list(run_dir.glob("*.pth"))
+                if checkpoint_files:
+                    checkpoint_path = sorted(checkpoint_files)[-1]
+                    break
+    
+    if not checkpoint_path:
+        raise FileNotFoundError(f"No checkpoint found for {run_id} in {mlruns_dir}")
+        
+    print(f"Loading checkpoint: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+    
+    model = get_model(model_name, num_classes, pretrained=False)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model = model.to(DEVICE)
+    model.eval()
+    
+    return model, classes_list
+
+
 @app.on_event("startup")
 def startup():
     """Load model when server starts."""
@@ -73,9 +119,13 @@ def startup():
     print("=" * 50)
     print("Loading model...")
     print("=" * 50)
-    model, classes = load_model_from_mlflow(MODEL_RUN_ID)
-    print("=" * 50)
-    print("✓ API ready!")
+    try:
+        model, classes = load_model_safe(MODEL_RUN_ID)
+        print(f"✓ Loaded {len(classes)} classes")
+        print("✓ API ready!")
+    except Exception as e:
+        print(f"✗ Failed to load model: {e}")
+        # Don't crash, just log. Predict will fail.
     print("=" * 50)
 
 

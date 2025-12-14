@@ -1,0 +1,44 @@
+# =============================================================================
+# LSC-Connect API Dockerfile (Optimized - CPU Only)
+# =============================================================================
+# Build:  docker build -f Dockerfile.cpu -t mano:cpu .
+# Run:    docker run -p 8000:8000 mano:cpu
+# =============================================================================
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install system dependencies (libgl1 replaces deprecated libgl1-mesa-glx)
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch CPU-only FIRST (smaller download)
+RUN pip install --no-cache-dir \
+    torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Copy and install other requirements
+COPY requirements-docker-cpu.txt .
+RUN pip install --no-cache-dir -r requirements-docker-cpu.txt
+
+# Copy source code
+COPY src/ ./src/
+
+# Copy ONLY the MLflow data we need:
+# 1. The "0" folder contains MLflow metadata
+# 2. Your experiment folder contains your run
+#
+# To find your experiment folder, look in models/mlruns/ for a folder
+# that contains your run_id (587ca0fd066a4a1fbf1a5a26971c3284)
+#
+# UPDATE THE LINE BELOW with your experiment folder name!
+COPY ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284  ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

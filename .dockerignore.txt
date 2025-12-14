@@ -1,0 +1,52 @@
+# =============================================================================
+# Docker Ignore - Files NOT copied into the image
+# =============================================================================
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints
+notebooks/
+
+# Data (raw data not needed in production)
+data/raw/
+data/raw_landmarks/
+data/processed/
+
+# Tests
+tests/
+test_*.py
+pytest.ini
+
+# Docs
+*.md
+docs/
+
+# Other
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

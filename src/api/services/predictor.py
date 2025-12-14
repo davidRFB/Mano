@@ -72,8 +72,8 @@ class GesturePredictor:
         """
         import mlflow
 
-        # Import get_model from your existing training code
-        from src.cv_model.train import get_model
+        # Import get_model from model_factory (avoids heavy dependencies)
+        from src.cv_model.model_factory import get_model
 
         mlflow.set_tracking_uri(self.settings.mlflow_tracking_uri)
 

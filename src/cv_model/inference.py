@@ -30,7 +30,8 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms
 
-from src.cv_model.train import get_model, MODELS_DIR, MLFLOW_TRACKING_URI
+from src.cv_model.train import MODELS_DIR, MLFLOW_TRACKING_URI
+from src.cv_model.model_factory import get_model
 
 # LLM corrector (optional - graceful fallback if not available)
 try:
