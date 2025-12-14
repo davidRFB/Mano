@@ -41,7 +41,7 @@
         
         .main-content {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
             gap: 20px;
             margin-top: 20px;
         }
@@ -195,6 +195,9 @@
             font-weight: bold;
             color: #ffcc00;
             letter-spacing: 4px;
+            word-break: break-all;
+            line-height: 1.2;
+            max-width: 100%;
         }
         
         .word-display .placeholder {
@@ -400,7 +403,7 @@
                     
                     <div class="setting-row">
                         <label>API URL</label>
-                        <input type="text" id="apiUrl" value="http://localhost:8000">
+                        <input type="text" id="apiUrl" value="https://davidrfb97-mano.hf.space">
                     </div>
                     
                     <div class="setting-row">
@@ -437,7 +440,7 @@
     <script>
         // ============ Configuration ============
         const config = {
-            apiUrl: 'http://localhost:8000',
+            apiUrl: 'https://davidrfb97-mano.hf.space',
             stabilityThreshold: 3,
             cooldownMs: 500,
             minConfidence: 0.25,
@@ -590,19 +593,99 @@
             return { xMin, yMin, xMax, yMax };
         }
 
-        // ============ Draw Landmarks on Crop ============
-        // Matches MediaPipe Python default styles (inference.py draws landmarks before cropping)
-        function drawLandmarksOnCrop(ctx, landmarks, bbox, cropWidth, cropHeight) {
-            // MediaPipe hand connections (same as HAND_CONNECTIONS)
-            const connections = [
-                [0, 1], [1, 2], [2, 3], [3, 4],           // Thumb
-                [0, 5], [5, 6], [6, 7], [7, 8],           // Index
-                [0, 9], [9, 10], [10, 11], [11, 12],      // Middle
-                [0, 13], [13, 14], [14, 15], [15, 16],    // Ring
-                [0, 17], [17, 18], [18, 19], [19, 20],    // Pinky
-                [5, 9], [9, 13], [13, 17]                 // Palm
-            ];
+        // ============ Landmark Colors (MUST match training data exactly) ============
+        // These colors were used in add_landmarks_to_dataset.py
+        const LANDMARK_COLORS = {
+            palm: '#fb3131',
+            thumb: '#ffe5b1',
+            index: '#80437f',
+            middle: '#fdc800',
+            ring: '#28ff2c',
+            pinky: '#1765ba',
+            palmConnection: '#7f8082'  // Gray for palm-to-finger connections
+        };
+        
+        // Landmark indices per finger group
+        const FINGER_LANDMARKS = {
+            palm: [0],                    // Wrist
+            thumb: [1, 2, 3, 4],
+            index: [5, 6, 7, 8],
+            middle: [9, 10, 11, 12],
+            ring: [13, 14, 15, 16],
+            pinky: [17, 18, 19, 20]
+        };
+        
+        // Connections with their colors
+        // Palm connections (wrist to finger bases): gray
+        // Finger connections: same color as the finger
+        const CONNECTION_GROUPS = [
+            // Palm connections (gray)
+            { connections: [[0, 1], [0, 5], [0, 9], [0, 13], [0, 17], [5, 9], [9, 13], [13, 17]], color: LANDMARK_COLORS.palmConnection },
+            // Thumb (within finger)
+            { connections: [[1, 2], [2, 3], [3, 4]], color: LANDMARK_COLORS.thumb },
+            // Index (within finger)
+            { connections: [[5, 6], [6, 7], [7, 8]], color: LANDMARK_COLORS.index },
+            // Middle (within finger)
+            { connections: [[9, 10], [10, 11], [11, 12]], color: LANDMARK_COLORS.middle },
+            // Ring (within finger)
+            { connections: [[13, 14], [14, 15], [15, 16]], color: LANDMARK_COLORS.ring },
+            // Pinky (within finger)
+            { connections: [[17, 18], [18, 19], [19, 20]], color: LANDMARK_COLORS.pinky }
+        ];
+        
+        // Get landmark color based on index
+        function getLandmarkColor(idx) {
+            if (idx === 0) return LANDMARK_COLORS.palm;
+            if (idx >= 1 && idx <= 4) return LANDMARK_COLORS.thumb;
+            if (idx >= 5 && idx <= 8) return LANDMARK_COLORS.index;
+            if (idx >= 9 && idx <= 12) return LANDMARK_COLORS.middle;
+            if (idx >= 13 && idx <= 16) return LANDMARK_COLORS.ring;
+            if (idx >= 17 && idx <= 20) return LANDMARK_COLORS.pinky;
+            return '#FFFFFF';
+        }
+
+        // ============ Draw Landmarks on Display Canvas ============
+        // This draws on the camera feed for visualization
+        function drawLandmarksOnDisplay(ctx, landmarks, width, height, mirrored = true) {
+            // Convert landmarks to pixel coordinates
+            const points = landmarks.map(l => ({
+                x: mirrored ? width - (l.x * width) : l.x * width,
+                y: l.y * height
+            }));
             
+            // Draw connections with correct colors
+            ctx.lineWidth = 2;
+            CONNECTION_GROUPS.forEach(group => {
+                ctx.strokeStyle = group.color;
+                group.connections.forEach(([i, j]) => {
+                    ctx.beginPath();
+                    ctx.moveTo(points[i].x, points[i].y);
+                    ctx.lineTo(points[j].x, points[j].y);
+                    ctx.stroke();
+                });
+            });
+            
+            // Draw landmarks with correct colors per finger
+            points.forEach((p, idx) => {
+                const color = getLandmarkColor(idx);
+                
+                // Outer circle (slightly larger, white outline)
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+                
+                // Inner circle (landmark color)
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
+                ctx.fill();
+            });
+        }
+
+        // ============ Draw Landmarks on Crop ============
+        // MUST match training data exactly (add_landmarks_to_dataset.py)
+        function drawLandmarksOnCrop(ctx, landmarks, bbox, cropWidth, cropHeight) {
             // Convert landmarks to crop coordinates (mirrored to match the crop)
             const cropLandmarks = landmarks.map(l => ({
                 // Mirror x coordinate since crop is mirrored
@@ -610,23 +693,34 @@
                 y: (l.y * canvas.height) - bbox.yMin
             }));
             
-            // Draw connections (white lines like MediaPipe Python default)
-            ctx.strokeStyle = '#FFFFFF';
+            // Draw connections with correct colors
             ctx.lineWidth = 2;
-            connections.forEach(([i, j]) => {
-                const p1 = cropLandmarks[i];
-                const p2 = cropLandmarks[j];
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.stroke();
+            CONNECTION_GROUPS.forEach(group => {
+                ctx.strokeStyle = group.color;
+                group.connections.forEach(([i, j]) => {
+                    const p1 = cropLandmarks[i];
+                    const p2 = cropLandmarks[j];
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                });
             });
             
-            // Draw landmarks (red dots like MediaPipe Python default)
-            ctx.fillStyle = '#FF0000';
-            cropLandmarks.forEach(p => {
+            // Draw landmarks with correct colors per finger
+            cropLandmarks.forEach((p, idx) => {
+                const color = getLandmarkColor(idx);
+                
+                // Outer circle (white outline)
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+                ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+                
+                // Inner circle (landmark color)
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
                 ctx.fill();
             });
         }
@@ -725,13 +819,8 @@
                 
                 const landmarks = results.multiHandLandmarks[0];
                 
-                // Draw landmarks (mirrored)
-                ctx.save();
-                ctx.scale(-1, 1);
-                ctx.translate(-canvas.width, 0);
-                drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-                drawLandmarks(ctx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
-                ctx.restore();
+                // Draw landmarks on display canvas with EXACT training colors
+                drawLandmarksOnDisplay(ctx, landmarks, canvas.width, canvas.height, true);
                 
                 // Get bbox and draw (need to mirror x coordinates)
                 const bbox = getHandBbox(landmarks, canvas.width, canvas.height);
