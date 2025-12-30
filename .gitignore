@@ -11,7 +11,10 @@ models/*.json
 models/mlruns/
 # C extensions
 *.so
-
+*.npy
+*.avi
+*.mp4
+webscrapping/
 # Distribution / packaging
 .Python
 build/

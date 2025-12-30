@@ -8,7 +8,7 @@ Controls:
     - Press any letter key (a-z) to capture a photo for that letter
     - Press ESC or 'q' to quit
     - Photos are saved to data/raw/{letter}/
-
+ccapap
 Features:
     - Hand detection with MediaPipe
     - 21 landmark points visualization
