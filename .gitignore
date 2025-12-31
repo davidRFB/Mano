@@ -14,7 +14,9 @@ models/mlruns/
 *.npy
 *.avi
 *.mp4
-webscrapping/
+*.m4v
+progress.txt
+*.m4a
 # Distribution / packaging
 .Python
 build/

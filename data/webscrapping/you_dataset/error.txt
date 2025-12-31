@@ -1,0 +1,53 @@
+ERROR: [youtube] XwRvJ01qfWw: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1301 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=_dWPumbWR_k
+[youtube] _dWPumbWR_k: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] _dWPumbWR_k: Downloading android sdkless player API JSON
+[youtube] _dWPumbWR_k: Downloading web safari player API JSON
+ERROR: [youtube] _dWPumbWR_k: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1302 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=b2_7SgRrC-8
+[youtube] b2_7SgRrC-8: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] b2_7SgRrC-8: Downloading android sdkless player API JSON
+[youtube] b2_7SgRrC-8: Downloading web safari player API JSON
+ERROR: [youtube] b2_7SgRrC-8: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1303 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=RdHXNTnLB70
+[youtube] RdHXNTnLB70: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] RdHXNTnLB70: Downloading android sdkless player API JSON
+[youtube] RdHXNTnLB70: Downloading web safari player API JSON
+ERROR: [youtube] RdHXNTnLB70: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1304 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=MKl8C4twqn8
+[youtube] MKl8C4twqn8: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] MKl8C4twqn8: Downloading android sdkless player API JSON
+[youtube] MKl8C4twqn8: Downloading web safari player API JSON
+ERROR: [youtube] MKl8C4twqn8: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1305 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=XsW86av9M24
+[youtube] XsW86av9M24: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] XsW86av9M24: Downloading android sdkless player API JSON
+[youtube] XsW86av9M24: Downloading web safari player API JSON
+ERROR: [youtube] XsW86av9M24: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1306 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=ZynyTO8lM_o
+[youtube] ZynyTO8lM_o: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] ZynyTO8lM_o: Downloading android sdkless player API JSON
+[youtube] ZynyTO8lM_o: Downloading web safari player API JSON
+ERROR: [youtube] ZynyTO8lM_o: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1307 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=PEYNAI8dUks
+[youtube] PEYNAI8dUks: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] PEYNAI8dUks: Downloading android sdkless player API JSON
+[youtube] PEYNAI8dUks: Downloading web safari player API JSON
+ERROR: [youtube] PEYNAI8dUks: Video unavailable. This content isn't available, try again later. The current session has been rate-limited by YouTube for up to an hour. It is recommended to use `-t sleep` to add a delay between video requests to avoid exceeding the rate limit. For more information, refer to  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#this-content-isnt-available-try-again-later
+[download] Downloading item 1308 of 3169
+[youtube] Extracting URL: https://www.youtube.com/watch?v=oYcGbJqI_GA
+[youtube] oYcGbJqI_GA: Downloading webpage
