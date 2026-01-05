@@ -9,7 +9,6 @@ MANO: Colombian Sign Language translator using CV model + LLM pipeline.
 - **Show, don't tell**: Provide working code examples, not theoretical explanations
 - **Incremental changes**: Small, testable modifications over large refactors. DO NOT MAKE MASSIVE CHANGES WITHOUT PRIOR DISCUSSION
 - **Follow existing patterns**: Match coding style and structure already present in the codebase
-
 ---
 
 ## Coding Standards
@@ -46,26 +45,7 @@ def predict_gesture(image, model):
 - Use pytest fixtures for setup
 - Aim for >80% coverage
 
-### API Design
-- RESTful conventions
-- Pydantic models for request/response
-- Explicit error handling with appropriate HTTP status codes
-- Include request validation
 
-```python
-# Good
-@app.post("/predict", response_model=PredictionResponse)
-async def predict_gesture(file: UploadFile = File(...)) -> PredictionResponse:
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    # ...
-```
-
-### Docker
-- Multi-stage builds when beneficial
-- Minimal base images (slim/alpine variants)
-- .dockerignore to exclude unnecessary files
-- Health checks in Dockerfile
 
 ### Git Workflow
 - Branch naming: `feature/`, `fix/`, `refactor/`
@@ -139,11 +119,6 @@ async def predict_gesture(file: UploadFile = File(...)) -> PredictionResponse:
 - Use cloud secret managers in production
 - Document all required env vars in README
 
-### Docker Images
-- Tag with semantic versions: `v1.0.0`, `v1.0.1`
-- Also tag `latest` for convenience
-- Include git commit SHA in image label
-
 ### Logging
 - Use structured logging (JSON format)
 - Log levels: DEBUG (dev), INFO (prod), ERROR (always)
@@ -165,18 +140,6 @@ async def predict_gesture(file: UploadFile = File(...)) -> PredictionResponse:
 - **TODOs**: Include context and priority
 
 ```python
-# Good
-# Using quantization here reduces inference time by 40% but 
-# slightly decreases accuracy (0.87 → 0.85)
-quantized_model = torch.quantization.quantize_dynamic(...)
-
-# Bad
-# Quantize the model
-quantized_model = torch.quantization.quantize_dynamic(...)
-```
-
----
-
 ## Anti-Patterns to Avoid
 
 ### Code
@@ -199,8 +162,6 @@ quantized_model = torch.quantization.quantize_dynamic(...)
 - ❌ Skipping tests "to save time"
 
 ---
-
-## Quick Reference
 
 ### Starting a Feature
 ```bash

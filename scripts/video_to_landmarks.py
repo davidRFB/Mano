@@ -9,17 +9,23 @@ Usage:
     # For letters (hand only, no pose)
     python scripts/video_to_landmarks.py videos/ --letters
 
+    # Skip already processed + parallel
+    python scripts/video_to_landmarks.py videos/ --skip-existing --workers 4
+
 Output:
     Words:   data/raw_words/{word}/*.npy   (default, holistic)
     Letters: data/raw_landmarks/{letter}/*.npy
 """
 
 import argparse
+import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+
 import cv2
 import mediapipe as mp
 import numpy as np
-from pathlib import Path
-from datetime import datetime
 
 # Output directories
 LANDMARKS_DIR = Path("./data/raw_landmarks")
@@ -197,18 +203,46 @@ def process_single(
     return True
 
 
+def get_base_label(filename: str) -> str:
+    """Get base label from filename, removing _2, _3 suffixes."""
+    stem = Path(filename).stem.lower()
+    return re.sub(r"_\d+$", "", stem)
+
+
+def get_existing_labels(is_word: bool) -> set[str]:
+    """Get set of labels that already have .npy files."""
+    out_dir = WORDS_DIR if is_word else LANDMARKS_DIR
+    if not out_dir.exists():
+        return set()
+    return {d.name for d in out_dir.iterdir() if d.is_dir() and list(d.glob("*.npy"))}
+
+
+def process_video_worker(args: tuple) -> tuple[str, bool, str]:
+    """Worker function for parallel processing."""
+    video_path, label, is_word, min_confidence = args
+    try:
+        success = process_single(
+            video_path, label, is_word, holistic=is_word, min_confidence=min_confidence
+        )
+        return label, success, ""
+    except Exception as e:
+        return label, False, str(e)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract landmarks from video files")
     parser.add_argument("input", type=str, help="Video file or folder of videos")
     parser.add_argument("--letters", action="store_true", help="Letter mode (hand only, no pose)")
     parser.add_argument("--confidence", type=float, default=0.5, help="Min detection confidence")
+    parser.add_argument("--skip-existing", action="store_true", help="Skip videos already processed")
+    parser.add_argument("--workers", type=int, default=1, help="Number of parallel workers")
 
     args = parser.parse_args()
 
     input_path = Path(args.input)
     is_word = not args.letters  # Default: word mode (holistic)
 
-    video_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+    video_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
 
     if input_path.is_file():
         # Single video - filename is the label
@@ -223,17 +257,56 @@ def main():
             print(f"No video files found in {input_path}")
             return
 
-        print(f"Found {len(videos)} videos")
+        # Skip existing if requested
+        if args.skip_existing:
+            existing = get_existing_labels(is_word)
+            before = len(videos)
+            videos = [v for v in videos if get_base_label(v.name) not in existing]
+            skipped = before - len(videos)
+            print(f"Skipping {skipped} already processed videos")
+
+        if not videos:
+            print("All videos already processed!")
+            return
+
+        print(f"Processing {len(videos)} videos")
         print(f"Mode: {'words (holistic)' if is_word else 'letters (hand only)'}")
-        print("-" * 40)
+        print(f"Workers: {args.workers}")
+        print("-" * 60)
 
         success = 0
-        for video in sorted(videos):
-            label = video.stem.lower()  # filename without extension
-            if process_single(video, label, is_word, holistic=is_word, min_confidence=args.confidence):
-                success += 1
+        errors = 0
 
-        print(f"\nProcessed {success}/{len(videos)} videos successfully")
+        if args.workers > 1:
+            # Parallel processing
+            tasks = [
+                (video, get_base_label(video.name), is_word, args.confidence)
+                for video in videos
+            ]
+
+            with ProcessPoolExecutor(max_workers=args.workers) as executor:
+                futures = {executor.submit(process_video_worker, t): t for t in tasks}
+
+                for future in as_completed(futures):
+                    label, ok, error = future.result()
+                    if ok:
+                        success += 1
+                        print(f"✓ {label}")
+                    else:
+                        errors += 1
+                        if error:
+                            print(f"✗ {label}: {error}")
+        else:
+            # Sequential processing
+            for video in sorted(videos):
+                label = get_base_label(video.name)
+                if process_single(video, label, is_word, holistic=is_word, min_confidence=args.confidence):
+                    success += 1
+                else:
+                    errors += 1
+
+        print("-" * 60)
+        print(f"Done: {success} success | {errors} errors")
     else:
         print(f"Error: {input_path} not found")
 
