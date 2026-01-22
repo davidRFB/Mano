@@ -1,0 +1,6 @@
+outs:
+- md5: a9a94594b8b7fd93aefe3f189fcb2c7e.dir
+  size: 103118779
+  nfiles: 1944
+  hash: md5
+  path: raw_words_landmarks
