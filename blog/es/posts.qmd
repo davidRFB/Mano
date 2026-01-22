@@ -1,0 +1,12 @@
+---
+title: "Experimentos"
+listing:
+  contents: posts
+  sort: "date desc"
+  type: default
+  categories: true
+---
+
+## Registro de Experimentos
+
+Registro cronológico de experimentos, hallazgos e iteraciones.

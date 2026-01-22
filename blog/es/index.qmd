@@ -1,0 +1,39 @@
+---
+title: "MANO"
+subtitle: "Sistema de Reconocimiento de Lengua de Señas Colombiana"
+---
+
+## Resumen
+
+**MANO** es un sistema de código abierto para traducir la Lengua de Señas Colombiana (LSC) a texto. Une el reconocimiento de señas estáticas (alfabeto) y gestos dinámicos (palabras) utilizando una tubería híbrida de Visión por Computadora y Modelos de Lenguaje (LLMs).
+
+::: {.grid}
+
+::: {.g-col-6}
+### 🎯 Objetivos
+- Traducción de LSC en **tiempo real**.
+- Procesamiento **local** centrado en la privacidad.
+- **Accesible** mediante cámaras web estándar.
+:::
+
+::: {.g-col-6}
+### 🚀 Tecnologías
+- **Visión**: MediaPipe y PyTorch.
+- **Lógica**: Modelos BiGRU y Transformers.
+- **Corrección**: Post-procesamiento con LLM.
+:::
+
+:::
+
+## Características Principales
+
+| Función | Estado | Detalles |
+|---------|--------|----------|
+| **Reconocimiento de Letras** | ✅ Listo | MobileNetV2 (99% precisión) |
+| **Reconocimiento de Palabras** | 🚧 Beta | BiGRU con Puntos Holísticos |
+| **Autocorrección** | ✅ Listo | Trie + LLM (Groq/Ollama) |
+| **Despliegue Web** | ✅ En Vivo | Docker + FastAPI |
+
+## Primeros Pasos
+
+Revisa nuestro [Registro de Experimentos](posts.qmd) para ver cómo lo construimos, o visita el [Repositorio en GitHub](https://github.com/davidrfb/Mano) para ejecutar el código.

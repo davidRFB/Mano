@@ -8,372 +8,211 @@ Quick reference for file locations and purposes. **Update this when adding new f
 
 ```
 Mano/
-├── .dvc/                   # DVC configuration
-│   └── config              # Remote storage settings (Google Drive)
-├── .github/
-│   └── workflows/          # CI/CD pipelines
-│       ├── ci.yml          # Testing, linting, docker build
-│       └── cd.yml          # Deployment to cloud
-├── blog/                   # Quarto blog (project journey)
-│   ├── _quarto.yml         # Quarto configuration
-│   ├── index.qmd           # Blog home page
-│   ├── posts/              # Blog posts (polished notebooks)
-│   │   ├── 01-project-kickoff/
-│   │   ├── 02-model-analysis/
-│   │   ├── 03-hyperparameter-optimization/
-│   │   ├── 04-landmark-experiment/
-│   │   ├── 05-word-correction/
-│   │   └── ...
-│   └── figures/            # All blog figures (ordered naming)
-│       ├── 01-class-distribution.png
-│       ├── 02-training-curves.png
-│       └── ...
+├── api/                        # FastAPI application
+│   ├── main.py                 # API endpoints
+│   └── Dockerfile              # Container image
+├── blog/                       # Project documentation/blog
+│   ├── figures/                # Generated figures
+│   └── posts/                  # Blog posts
 ├── data/
-│   ├── raw/                # Original gesture images (DVC tracked)
-│   ├── raw.dvc             # DVC pointer file (Git tracked)
-│   ├── raw_landmarks/      # Letter landmark sequences (.npy, 21 landmarks)
-│   ├── raw_words/          # Word landmark sequences (.npy, 51 landmarks)
-│   ├── webscrapping/       # Video datasets
-│   │   ├── insor_dataset/  # INSOR sign language videos
-│   │   ├── youtube_dataset_proc/  # Processed YouTube videos
-│   │   └── combined_words/ # Combined dataset (symlinks)
-│   ├── processed/          # Preprocessed data
-│   └── splits/             # Train/val/test indices
-├── models/                 # Trained model checkpoints
-│   ├── mlruns/             # MLflow experiment tracking
-│   └── *.pth               # Model weights (gitignored)
-├── notebooks/              # Working Jupyter notebooks (exploratory)
+│   ├── raw/                    # Original gesture images (DVC tracked)
+│   ├── raw_landmarks/          # Letter landmarks (.npy, 21 landmarks)
+│   ├── raw_words/              # Word landmarks (.npy, 51 landmarks)
+│   └── webscrapping/           # Video datasets
+├── models/
+│   ├── checkpoints/            # Trained model checkpoints
+│   └── mlruns/                 # MLflow experiment tracking
+├── notebooks/                  # Jupyter notebooks (exploration)
 │   ├── 01_data_analysis.ipynb
 │   ├── 02_model_analysis.ipynb
-│   ├── 05_landmark_comparison.ipynb
-│   └── 06_llm_correction.ipynb
-├── scripts/                # Utility scripts
-│   ├── capture_data.py     # Data collection tool
-│   ├── video_to_landmarks.py     # Extract landmarks from videos
-│   ├── combine_word_datasets.py  # Combine INSOR + YouTube datasets
-│   └── process_youtube_dataset.py # Process YouTube videos (cut, rename)
+│   └── ...
+├── scripts/                    # Main entry point scripts
+│   ├── 01_capture_data.py      # Capture landmarks from webcam
+│   ├── 03_train.py             # Train models
+│   ├── 04_evaluate.py          # Evaluate and generate metrics
+│   └── 05_demo.py              # Real-time demo
 ├── src/
-│   ├── cv_model/           # Computer vision model code
+│   ├── data/                   # Data handling
 │   │   ├── __init__.py
-│   │   ├── preprocessing.py      # Image data transforms (letters)
-│   │   ├── landmarks_preprocessing.py  # Landmark features (letters)
-│   │   ├── words_preprocessing.py      # Holistic landmarks (words)
-│   │   ├── train.py              # Image model training
-│   │   ├── landmarks_train.py    # Landmark model training (letters)
-│   │   ├── words_train.py        # Word model training
-│   │   ├── landmarks_model.py    # Sequence models (letters)
-│   │   ├── words_model.py        # Sequence models (words)
-│   │   ├── inference.py          # Real-time letter prediction
-│   │   ├── landmarks_inference.py # Landmark-based inference (letters)
-│   │   └── words_inference.py    # Word prediction from video
-│   ├── api/                # FastAPI application (planned)
-│   ├── llm/                # LLM word correction
+│   │   ├── preprocessing.py    # Feature extraction, normalization
+│   │   └── dataset.py          # PyTorch Dataset classes
+│   ├── models/                 # Neural network models
 │   │   ├── __init__.py
-│   │   └── corrector.py    # Groq/Ollama Spanish word corrector
-│   └── frontend/           # Streamlit interface (planned)
-├── tests/                  # Test suite
-├── docker/                 # Dockerfiles
-├── .dvcignore              # Files DVC should ignore
-├── .env.example            # Environment variable template
-├── .gitignore
-├── requirements.txt        # Python dependencies
-├── CLAUDE.md               # AI assistant guidelines
-├── CHANGELOG.md            # Project changes log
-├── STRUCTURE.md            # This file
-└── README.md               # User documentation
-```
-
----
-
-## Data Versioning (DVC)
-
-### Setup
-- **Remote**: Google Drive (`G:\My Drive\dvc-storage\mano`)
-- **Tracked**: `data/raw/` (gesture images)
-
-### Workflow
-```powershell
-# After capturing new images
-dvc add data/raw
-dvc push
-git add data/raw.dvc
-git commit -m "Add more training data (v1.1)"
-```
-
-### Restore Data
-```powershell
-# On new machine or after checkout
-dvc pull
-```
-
-### Current Versions
-| Version | Images | Notes |
-|---------|--------|-------|
-| v1 | 1,871 | Initial capture, near-duplicates, single session |
-
----
-
-## Blog (Quarto)
-
-### Purpose
-Document the project journey in a personal, relatable way. Convert working notebooks into polished posts.
-
-### Structure
-- `blog/posts/` - One folder per post (contains .qmd file)
-- `blog/figures/` - Centralized figures with ordered naming
-- `blog/_quarto.yml` - Site configuration
-
-### Figure Naming Convention
-```
-{post_number}-{description}.png
-Examples:
-  01-class-distribution.png
-  02-training-curves.png
-  02-confusion-matrix.png
-```
-
-### Workflow
-1. Explore in `notebooks/` (working notebooks)
-2. Extract insights and figures
-3. Create polished post in `blog/posts/`
-4. Save figures to `blog/figures/`
-
-### Build & Preview
-```powershell
-cd blog
-quarto preview    # Local preview
-quarto render     # Build static site
+│   │   ├── static.py           # MLP for static gestures
+│   │   └── dynamic.py          # RNN for dynamic gestures
+│   ├── training/               # Training utilities
+│   │   ├── __init__.py
+│   │   ├── trainer.py          # Training loop
+│   │   └── metrics.py          # Evaluation metrics
+│   ├── inference/              # Prediction code
+│   │   ├── __init__.py
+│   │   └── predictor.py        # Model wrapper
+│   ├── llm/                    # LLM word correction
+│   │   ├── __init__.py
+│   │   ├── corrector.py        # Groq/Ollama backends
+│   │   └── autocomplete.py     # Word completion
+│   └── cv_model/               # [LEGACY] Old CV model code
+├── tests/                      # Test suite
+├── requirements.txt            # Python dependencies
+├── requirements-api.txt        # API-only dependencies
+├── CLAUDE.md                   # AI assistant guidelines
+├── CHANGELOG.md                # Project changes log
+├── STRUCTURE.md                # This file
+├── REFACTOR_PLAN.md            # Migration plan
+└── README.md                   # User documentation
 ```
 
 ---
 
 ## Core Modules
 
-### `src/cv_model/` - Letters Pipeline (Images)
-**Purpose**: Letter gesture recognition from images/landmarks
+### `src/data/` - Data Handling
 
 | File | Description |
 |------|-------------|
-| `preprocessing.py` | Image Dataset class, transforms, augmentation |
-| `landmarks_preprocessing.py` | Landmark feature extraction (21 landmarks, X/Y + angles) |
-| `landmarks_model.py` | Sequence models: GRU, BiGRU, LSTM, GRU+Attention |
-| `train.py` | Image model training with MLflow |
-| `landmarks_train.py` | Landmark model training with feature modes |
-| `inference.py` | Real-time letter prediction with MediaPipe |
-| `landmarks_inference.py` | Landmark-based inference, loads feature_mode from checkpoint |
+| `preprocessing.py` | Feature extraction from landmarks (xy, angles, distances) |
+| `dataset.py` | PyTorch Dataset for landmarks, train/val splitting |
 
-**Feature modes (letters - 21 landmarks)**:
-- `xy`: 42 features (X, Y coordinates)
-- `xyz`: 63 features (X, Y, Z - original)
-- `xy_angles`: 56 features (X, Y + 14 finger angles) - DEFAULT
-- `xy_angles_distances`: 66 features (above + 10 key distances)
-- `full`: 108 features (above + 42 velocity features)
+**Feature modes:**
+- `xy`: 42 features (21 landmarks × 2 coords)
+- `xy_angles`: 56 features (xy + 14 finger angles) - DEFAULT
+- `xy_angles_distances`: 66 features (above + 10 distances)
+- `full`: 108 features (above + velocities)
 
-### `src/cv_model/` - Words Pipeline (Video Sequences)
-**Purpose**: Word-level sign language recognition from holistic landmarks
+### `src/models/` - Neural Networks
 
 | File | Description |
 |------|-------------|
-| `words_preprocessing.py` | Holistic landmarks (51 = 9 pose + 21 left + 21 right) |
-| `words_model.py` | Sequence models: GRU, BiGRU, LSTM, GRU+Attention, Transformer |
-| `words_train.py` | Training with MLflow, label smoothing, top-5 accuracy |
-| `words_inference.py` | Word prediction from video file or webcam |
+| `static.py` | MLP for single-frame classification |
+| `dynamic.py` | GRU/BiGRU/LSTM for sequence classification |
 
-**Feature modes (words - 51 landmarks)**:
-- `xy`: 102 features (X, Y coordinates)
-- `xyz`: 153 features (X, Y, Z)
-- `xy_angles`: 130 features (X, Y + 28 angles, 14 per hand) - DEFAULT
-- `full`: 232 features (above + 102 velocities)
+**Model types:**
+- `static`: MLP for letters without movement
+- `gru`: Basic GRU
+- `bigru`: Bidirectional GRU (recommended)
+- `lstm`: Bidirectional LSTM
 
-**Key differences from letters**:
-- Uses holistic MediaPipe (pose + both hands) instead of single hand
-- Variable sequence length (max 90 frames vs fixed 20)
-- Larger vocabulary (~1251 words vs 27 letters)
-- Normalization centered on shoulders
-
-### `src/llm/`
-**Purpose**: LLM-based Spanish word correction
+### `src/training/` - Training Utilities
 
 | File | Description |
 |------|-------------|
-| `corrector.py` | SignLanguageCorrector class with Groq/Ollama backends |
+| `trainer.py` | Training loop with early stopping |
+| `metrics.py` | Accuracy, confusion matrix, classification report |
 
-**Key functions**:
-- `SignLanguageCorrector(backend="groq")` - Fast cloud API (~100ms)
-- `SignLanguageCorrector(backend="ollama")` - Local model (~5s)
-- `correct_sequence(letters)` - Returns corrected Spanish word
+### `src/inference/` - Prediction
 
-### `scripts/`
-**Purpose**: Data collection and processing utilities
+| File | Description |
+|------|-------------|
+| `predictor.py` | Unified predictor for static/dynamic models |
+
+### `src/llm/` - LLM Correction (Optional)
+
+| File | Description |
+|------|-------------|
+| `corrector.py` | Spanish word correction with Groq/Ollama |
+| `autocomplete.py` | Fast word completion without LLM |
+
+---
+
+## Scripts (Entry Points)
 
 | Script | Description |
 |--------|-------------|
-| `capture_data.py` | Capture letter images from webcam |
-| `video_to_landmarks.py` | Extract landmarks from videos (hand or holistic) |
-| `combine_word_datasets.py` | Combine INSOR + YouTube datasets via symlinks |
-| `process_youtube_dataset.py` | Process YouTube videos (cut first 2.5s, rename) |
+| `01_capture_data.py` | Capture hand landmarks from webcam |
+| `03_train.py` | Train gesture recognition models |
+| `04_evaluate.py` | Evaluate model and generate figures |
+| `05_demo.py` | Real-time webcam demo |
 
-**video_to_landmarks.py usage**:
+### Usage Examples
+
 ```bash
-# Words (default - holistic landmarks)
-python scripts/video_to_landmarks.py data/webscrapping/combined_words/ --skip-existing --workers 4
+# Capture training data
+python scripts/01_capture_data.py
 
-# Letters (hand only)
-python scripts/video_to_landmarks.py videos/ --letters
-```
+# Train a model on all letters
+python scripts/03_train.py --model bigru --epochs 100
 
-**combine_word_datasets.py usage**:
-```bash
-python scripts/combine_word_datasets.py --stats     # show statistics
-python scripts/combine_word_datasets.py --dry-run   # preview
-python scripts/combine_word_datasets.py             # execute
+# Train only on dynamic letters
+python scripts/03_train.py --model bigru --letters j,h,z,nn,s
+
+# Evaluate model
+python scripts/04_evaluate.py --checkpoint models/checkpoints/<run>/best.pth
+
+# Run demo
+python scripts/05_demo.py --checkpoint models/checkpoints/<run>/best.pth
 ```
 
 ---
 
-## Configuration Files
+## API
 
-### DVC
-- `.dvc/config` - Remote storage configuration
-- `.dvcignore` - Files to exclude from DVC tracking
-- `data/raw.dvc` - Pointer to data version
+FastAPI service for landmark-based prediction.
 
-### MLflow
-- `models/mlruns/` - Experiment tracking data (gitignored)
-- Access via: `mlflow ui` (run from project root)
+```bash
+# Run locally
+uvicorn api.main:app --reload --port 8000
 
-### Docker
-- `docker/Dockerfile.api` - API container image
-- `docker/Dockerfile.frontend` - Frontend container image
-- `docker-compose.yml` - Local orchestration
+# Build Docker
+docker build -f api/Dockerfile -t lsc-api .
+
+# Run Docker
+docker run -p 8000:8000 lsc-api
+```
+
+Endpoints:
+- `GET /` - API info
+- `GET /health` - Health check
+- `POST /predict` - Predict from landmark sequence
 
 ---
 
-## Data Flow
+## Data Formats
 
-### Letters Pipeline (Static Images)
+### Landmarks (Letters)
+
 ```
-1. DATA COLLECTION
-   Webcam → capture_data.py → data/raw/{letter}/*.jpg
-
-2. TRAINING (images)
-   data/raw/ → preprocessing.py → train.py → models/*.pth
-
-3. TRAINING (landmarks)
-   data/raw_landmarks/ → landmarks_preprocessing.py → landmarks_train.py → models/*.pth
-
-4. INFERENCE
-   Webcam → inference.py → MediaPipe → Model → Letter Predictions
+data/raw_landmarks/{letter}/*.npy
+Shape: (20, 21, 3) = 20 frames × 21 landmarks × 3 coords
 ```
 
-### Words Pipeline (Video Sequences)
-```
-1. DATA COLLECTION
-   INSOR videos + YouTube videos
-       ↓
-   process_youtube_dataset.py (cut first 2.5s)
-       ↓
-   combine_word_datasets.py (symlinks to combined_words/)
-       ↓
-   video_to_landmarks.py (extract holistic landmarks)
-       ↓
-   data/raw_words/{word}/*.npy  (seq_len, 51, 3)
+### Landmarks (Words)
 
-2. TRAINING
-   data/raw_words/ → words_preprocessing.py → words_train.py → models/*.pth
-                                                             → models/mlruns/
-
-3. INFERENCE
-   Video/Webcam → words_inference.py → MediaPipe Holistic → Model → Word Predictions
 ```
+data/raw_words/{word}/*.npy
+Shape: (seq_len, 51, 3) = variable frames × 51 landmarks × 3 coords
+```
+
+51 landmarks = 9 pose + 21 left hand + 21 right hand
 
 ---
 
-## Common Tasks
+## Gesture Classification
 
-### Capture New Training Data
-```powershell
-cd scripts
-python capture_data.py
-# Press a-z to capture, ESC to quit
-```
+### Static Letters (22)
+Letters that don't require movement: A-I, K-R, T-Y
 
-### Train Model (Letters)
+### Dynamic Letters (5)
+Letters that require movement: J, H, Z, Ñ, S
+
+---
+
+## MLflow Experiments
+
 ```bash
-# Image-based
-python -m src.cv_model.train --model mobilenet_v2 --epochs 30
-
-# Landmark-based
-python -m src.cv_model.landmarks_train --model bigru --features xy_angles --epochs 100
-```
-
-### Train Model (Words)
-```bash
-# All words (1251 classes)
-python -m src.cv_model.words_train --model bigru --epochs 100
-
-# Only words with 2+ samples (recommended)
-python -m src.cv_model.words_train --model bigru --min-samples 2 --epochs 100
-
-# Transformer for longer sequences
-python -m src.cv_model.words_train --model transformer --min-samples 2
-```
-
-### Run Inference (Letters)
-```bash
-python -m src.cv_model.inference --experiment V3_landmarks
-```
-Controls: SPACE (capture) | BACKSPACE (delete) | C (clear) | ENTER (correct) | ESC (quit)
-
-### Run Inference (Words)
-```bash
-python -m src.cv_model.words_inference --video path/to/video.mp4
-python -m src.cv_model.words_inference --webcam
-```
-
-### Update Data Version
-```powershell
-dvc add data/raw
-dvc push
-git add data/raw.dvc
-git commit -m "Description of data changes"
-```
-
-### View MLflow Experiments
-```powershell
+# View experiments
 mlflow ui --backend-store-uri models/mlruns
+
 # Open http://localhost:5000
 ```
 
 ---
 
-## File Naming Conventions
+## Legacy Code
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Python files | `snake_case.py` | `capture_data.py` |
-| Classes | `PascalCase` | `LSCDataset` |
-| Functions | `snake_case()` | `get_model()` |
-| Constants | `UPPER_SNAKE_CASE` | `IMAGENET_MEAN` |
-| Model files | `{arch}_v{ver}_{metric}.pth` | `mobilenet_v2_v1_acc0.95.pth` |
-| Blog figures | `{num}-{desc}.png` | `02-training-curves.png` |
-| Data images | `{letter}_{seq}_{timestamp}.jpg` | `a_0001_20251127_181813.jpg` |
+The `src/cv_model/` directory contains old code from the RGB-based approach.
+It's kept for reference but the new pipeline uses `src/data/`, `src/models/`, etc.
 
 ---
 
-## What's Tracked Where
-
-| Content | Git | DVC | Notes |
-|---------|-----|-----|-------|
-| Source code | ✅ | - | `src/`, `scripts/` |
-| Config files | ✅ | - | `.yaml`, `.json`, `.toml` |
-| `.dvc` pointer files | ✅ | - | `data/raw.dvc` |
-| Raw images | - | ✅ | `data/raw/` |
-| Model weights | - | ✅ | `models/*.pth` (optional) |
-| MLflow runs | - | - | Gitignored, local only |
-| Blog content | ✅ | - | `blog/` |
-
----
-
-**Last updated**: 2025-12-31
+**Last updated**: 2025-01-22
 **Maintainer**: Update when structure changes

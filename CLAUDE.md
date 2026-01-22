@@ -19,6 +19,7 @@ MANO: Colombian Sign Language translator using CV model + LLM pipeline.
 - **Type hints**: Required for all functions
 - **Docstrings**: Google style for public functions only
 - **Imports**: Absolute imports, grouped (stdlib → third-party → local)
+- Use micromamba env called Mano
 
 ```python
 # Good
@@ -217,5 +218,4 @@ When context is unclear, ask:
 ---
 
 ## Version
-Last updated: 2025-11-27
 Review this file periodically as project evolves.

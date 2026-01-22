@@ -4,11 +4,12 @@ __pycache__/
 *$py.class
 
 # Data and models
-data/raw/
-data/processed/
+
+data/*
 models/*.pth
 models/*.json
-models/mlruns/
+models/mlruns_*
+models/*
 # C extensions
 *.so
 *.npy

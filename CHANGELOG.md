@@ -8,6 +8,39 @@ Format: `## [Version] - YYYY-MM-DD`
 
 ## [Unreleased]
 
+### Changed
+- **Major scripts reorganization** - Unified capture scripts with consistent interface
+  - All capture scripts now support `--mode` and `--output` parameters
+  - Numbered workflow: 01 (static) → 02 (sequences) → 03 (words) → 04 (train) → 05 (eval) → 06 (demo)
+
+### Added
+- **`scripts/01_capture_static.py`** - Unified single-frame capture
+  - Modes: `photo` (raw), `photo_landmarks` (with overlay), `landmarks` (.npy)
+  - Replaces old `capture_data.py`
+
+- **`scripts/02_capture_dynamic.py`** - Sequence capture for ALL letters
+  - Modes: `landmarks` (.npy), `video` (.avi), `both`
+  - Configurable frame count (`--frames`, default 20)
+  - Works for both static and dynamic letters (uniform training approach)
+
+- **`scripts/03_capture_words.py`** - Word gesture capture with Holistic
+  - Modes: `landmarks`, `video`, `both`
+  - Variable length recording (SPACE to stop)
+  - Uses MediaPipe Holistic: 51 landmarks (9 pose + 21 L-hand + 21 R-hand)
+
+- **`scripts/utils/`** - Utility scripts for data processing
+  - `video_to_landmarks.py` - Convert videos to .npy
+  - `add_landmarks_to_dataset.py` - Add landmarks overlay to photos
+  - `combine_word_datasets.py` - Merge INSOR + YouTube datasets
+  - `process_youtube_dataset.py` - Process scraped YouTube videos
+
+### Removed
+- `scripts/capture_data.py` - Replaced by `01_capture_static.py`
+- `scripts/capture_landmarks.py` - Replaced by `01_capture_static.py --mode landmarks`
+- `scripts/capture_video.py` - Replaced by `02_capture_dynamic.py --mode video`
+- `scripts/cap_video.py` - Test script, no longer needed
+- `scripts/capture_words.py` - Replaced by `03_capture_words.py`
+
 ---
 
 ## [0.4.0] - 2025-12-31

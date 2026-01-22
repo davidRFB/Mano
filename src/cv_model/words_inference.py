@@ -55,6 +55,7 @@ class WordsPredictor:
         self.model_name = self.checkpoint.get("model_name", "bigru")
         self.hidden_dim = self.checkpoint.get("hidden_dim", 256)
         self.num_layers = self.checkpoint.get("num_layers", 2)
+        self.display_names = self.checkpoint.get("display_names", {})
 
         # Initialize model
         self.model = get_words_model(
@@ -82,6 +83,12 @@ class WordsPredictor:
         print(f"Loaded model: {self.model_name}")
         print(f"Vocabulary: {self.num_classes} words")
         print(f"Feature mode: {self.feature_mode} ({self.feature_dim} features)")
+        if self.display_names:
+            print(f"Display names loaded: {len(self.display_names)}")
+
+    def get_display_name(self, class_name: str) -> str:
+        """Get display name for a class (with accents, underscores for spaces)."""
+        return self.display_names.get(class_name, class_name)
 
     def extract_frame_landmarks(self, frame: np.ndarray) -> np.ndarray | None:
         """Extract holistic landmarks from a single frame."""
@@ -187,7 +194,11 @@ class WordsPredictor:
         top_probs = top_probs[0].cpu().numpy()
         top_indices = top_indices[0].cpu().numpy()
 
-        predictions = [(self.classes[idx], float(prob)) for idx, prob in zip(top_indices, top_probs)]
+        predictions = []
+        for idx, prob in zip(top_indices, top_probs):
+            class_name = self.classes[idx]
+            display_name = self.get_display_name(class_name)
+            predictions.append((display_name, float(prob)))
         return predictions
 
     def predict_from_video(self, video_path: str, top_k: int = 5) -> list[tuple[str, float]]:
@@ -286,9 +297,65 @@ def find_latest_checkpoint(models_dir: Path = Path("models")) -> Path | None:
     return max(checkpoints, key=lambda p: p.stat().st_mtime)
 
 
+def test_on_directory(predictor: WordsPredictor, test_dir: str, top_k: int = 5) -> None:
+    """Test model on all videos in a directory. Filename = expected label."""
+    import re
+
+    test_path = Path(test_dir)
+    if not test_path.is_dir():
+        print(f"Error: {test_dir} is not a directory")
+        return
+
+    video_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+    videos = [f for f in test_path.iterdir() if f.suffix.lower() in video_extensions]
+
+    if not videos:
+        print(f"No video files found in {test_dir}")
+        return
+
+    print(f"\nTesting on {len(videos)} videos...")
+    print("=" * 70)
+
+    correct_top1 = 0
+    correct_top5 = 0
+    total = 0
+
+    for video_path in sorted(videos):
+        # Extract expected label from filename (remove _2, _3 suffixes)
+        expected = re.sub(r"_\d+$", "", video_path.stem.lower())
+
+        predictions = predictor.predict_from_video(str(video_path), top_k)
+        top1_word, top1_prob = predictions[0]
+        top5_words = [w for w, _ in predictions[:5]]
+
+        # Check accuracy (compare normalized versions)
+        top1_match = top1_word.replace("_", "").replace("ñ", "n") == expected.replace("_", "")
+        top5_match = any(w.replace("_", "").replace("ñ", "n") == expected.replace("_", "") for w in top5_words)
+
+        if top1_match:
+            correct_top1 += 1
+            status = "✓"
+        elif top5_match:
+            status = "~"
+        else:
+            status = "✗"
+
+        if top5_match:
+            correct_top5 += 1
+
+        total += 1
+
+        # Print result
+        print(f"{status} {expected:20s} → {top1_word:20s} ({top1_prob:.2%}) | Top5: {', '.join(top5_words[:3])}")
+
+    print("=" * 70)
+    print(f"Results: {correct_top1}/{total} top-1 ({correct_top1/total:.1%}) | {correct_top5}/{total} top-5 ({correct_top5/total:.1%})")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Word-level sign language inference")
     parser.add_argument("--video", type=str, help="Path to video file")
+    parser.add_argument("--test-dir", type=str, help="Test on all videos in directory")
     parser.add_argument("--webcam", action="store_true", help="Use webcam")
     parser.add_argument("--checkpoint", type=str, help="Path to model checkpoint")
     parser.add_argument("--top-k", type=int, default=5, help="Number of top predictions")
@@ -311,13 +378,22 @@ def main():
     try:
         if args.webcam:
             predictor.run_webcam()
+        elif args.test_dir:
+            test_on_directory(predictor, args.test_dir, args.top_k)
         elif args.video:
+            print(f"\nProcessing: {args.video}")
             predictions = predictor.predict_from_video(args.video, args.top_k)
-            print("\nPredictions:")
-            for word, prob in predictions:
-                print(f"  {word}: {prob:.4f}")
+            print("\nTop predictions:")
+            print("-" * 40)
+            for i, (word, prob) in enumerate(predictions, 1):
+                bar = "█" * int(prob * 20)
+                print(f"  {i}. {word:20s} {prob:6.2%} {bar}")
         else:
-            print("Specify --video or --webcam")
+            print("Specify --video, --test-dir, or --webcam")
+            print("\nExamples:")
+            print("  python -m src.cv_model.words_inference --video path/to/video.mp4")
+            print("  python -m src.cv_model.words_inference --test-dir data/webscrapping/combined_words/")
+            print("  python -m src.cv_model.words_inference --webcam")
     finally:
         predictor.close()
 

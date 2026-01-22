@@ -3,23 +3,25 @@ project:
   output-dir: _site
 
 website:
-  title: "MANO - Research Notes"
-  description: "Technical notes on building a Colombian Sign Language classifier"
+  title: "MANO"
+  description: "Colombian Sign Language Recognition"
   
   navbar:
     background: "#1a1a2e"
     foreground: "#eaeaea"
     left:
-      - href: index.qmd
-        text: Overview
-      - href: posts.qmd
-        text: Experiments
+      - text: "Home"
+        href: index.qmd
+      - text: "Blog"
+        href: posts.qmd
     right:
+      - text: "Español"
+        href: es/index.qmd
       - icon: github
         href: https://github.com/davidrfb/Mano
   
   page-footer:
-    center: "MANO - Colombian Sign Language Recognition"
+    center: "MANO - Lengua de Señas Colombiana"
     background: "#1a1a2e"
 
 format:

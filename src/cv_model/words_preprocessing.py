@@ -15,6 +15,8 @@ Usage:
     train_loader, val_loader, test_loader, num_classes, classes, feature_dim = create_dataloaders()
 """
 
+import json
+import re
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
 from torch.nn.utils.rnn import pad_sequence
@@ -23,6 +25,7 @@ import numpy as np
 
 # Configuration
 DATA_DIR = Path("./data/raw_words")
+DISPLAY_NAMES_FILE = Path("./data/raw_words/display_names.json")
 MAX_SEQUENCE_LENGTH = 90  # ~3 seconds at 30fps
 MIN_SEQUENCE_LENGTH = 15  # minimum frames to keep
 
@@ -77,6 +80,33 @@ FINGER_ANGLES = [
     (PINKY_MCP, PINKY_PIP, PINKY_DIP),
     (PINKY_PIP, PINKY_DIP, PINKY_TIP),
 ]
+
+
+def get_base_label(folder_name: str) -> str:
+    """
+    Get base label from folder name, removing trailing numbers.
+
+    Examples:
+        aveces -> aveces
+        aveces2 -> aveces
+        aveces_2 -> aveces
+        hola_3 -> hola
+    """
+    # Remove trailing _N or N patterns (where N is digits)
+    return re.sub(r"_?\d+$", "", folder_name)
+
+
+def load_display_names(display_names_file: Path = DISPLAY_NAMES_FILE) -> dict[str, str]:
+    """
+    Load display name mappings from JSON file.
+
+    Returns dict mapping normalized_name -> display_name.
+    Example: {"nino": "niño", "yomismo": "yo_mismo"}
+    """
+    if display_names_file.exists():
+        with open(display_names_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
 
 def compute_angle(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> float:
@@ -187,30 +217,54 @@ class WordsDataset(Dataset):
         self.max_seq_len = max_seq_len
         self.min_samples_per_class = min_samples_per_class
         self.samples: list[tuple[Path, int]] = []
-        self.classes: list[str] = []
+        self.classes: list[str] = []  # Normalized class names (nino, aveces)
+        self.display_names: dict[str, str] = {}  # nino -> niño, yomismo -> yo_mismo
         self.class_to_idx: dict[str, int] = {}
 
         self._load_samples()
 
     def _load_samples(self) -> None:
-        """Load all .npy file paths and their labels."""
-        # Get word directories with enough samples
-        word_dirs = []
+        """Load all .npy file paths and their labels, merging duplicate folders."""
+        # Load display names mapping
+        self.display_names = load_display_names(self.data_dir / "display_names.json")
+
+        # Group folders by base label (aveces, aveces2 -> aveces)
+        label_to_dirs: dict[str, list[Path]] = {}
         for d in sorted(self.data_dir.iterdir()):
             if d.is_dir():
-                npy_files = list(d.glob("*.npy"))
-                if len(npy_files) >= self.min_samples_per_class:
-                    word_dirs.append(d)
+                base_label = get_base_label(d.name)
+                if base_label not in label_to_dirs:
+                    label_to_dirs[base_label] = []
+                label_to_dirs[base_label].append(d)
 
-        self.classes = [d.name for d in word_dirs]
+        # Filter by min_samples_per_class (count across all merged folders)
+        valid_labels = []
+        for label, dirs in sorted(label_to_dirs.items()):
+            total_samples = sum(len(list(d.glob("*.npy"))) for d in dirs)
+            if total_samples >= self.min_samples_per_class:
+                valid_labels.append(label)
+
+        self.classes = valid_labels
         self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}
 
-        for word_dir in word_dirs:
-            label = self.class_to_idx[word_dir.name]
-            for npy_path in word_dir.glob("*.npy"):
-                self.samples.append((npy_path, label))
+        # Collect samples from all folders for each label
+        merged_count = 0
+        for label in self.classes:
+            class_idx = self.class_to_idx[label]
+            dirs = label_to_dirs[label]
+            if len(dirs) > 1:
+                merged_count += 1
+            for word_dir in dirs:
+                for npy_path in word_dir.glob("*.npy"):
+                    self.samples.append((npy_path, class_idx))
 
         print(f"Loaded {len(self.samples)} sequences from {len(self.classes)} words")
+        if merged_count > 0:
+            print(f"  (merged {merged_count} duplicate folder groups)")
+
+    def get_display_name(self, class_name: str) -> str:
+        """Get display name for a class (with accents, underscores for spaces)."""
+        return self.display_names.get(class_name, class_name)
 
     def _normalize_landmarks(self, landmarks: np.ndarray) -> np.ndarray:
         """
@@ -220,7 +274,7 @@ class WordsDataset(Dataset):
         """
         # Use shoulder midpoint as reference (pose indices 1, 2 = shoulders)
         left_shoulder = landmarks[:, 1:2, :]
-        right_shoulder = landmarks[:, 2:2, :]
+        right_shoulder = landmarks[:, 2:3, :]  # Fixed: was 2:2 (empty slice)
         center = (left_shoulder + right_shoulder) / 2  # (seq_len, 1, 3)
 
         # Center relative to torso
@@ -360,12 +414,12 @@ def create_dataloaders(
     feature_mode: str = DEFAULT_FEATURE_MODE,
     max_seq_len: int = MAX_SEQUENCE_LENGTH,
     min_samples_per_class: int = 1,
-) -> tuple[DataLoader, DataLoader, DataLoader, int, list[str], int]:
+) -> tuple[DataLoader, DataLoader, DataLoader, int, list[str], int, dict[str, str]]:
     """
     Create train, validation, and test DataLoaders.
 
     Returns:
-        (train_loader, val_loader, test_loader, num_classes, class_names, feature_dim)
+        (train_loader, val_loader, test_loader, num_classes, class_names, feature_dim, display_names)
     """
     base_dataset = WordsDataset(
         data_dir=data_dir,
@@ -434,6 +488,7 @@ def create_dataloaders(
         base_dataset.num_classes,
         base_dataset.classes,
         base_dataset.feature_dim,
+        base_dataset.display_names,
     )
 
 
@@ -442,14 +497,20 @@ if __name__ == "__main__":
     print(f"Feature modes: {FEATURE_MODES}")
 
     try:
-        train_loader, val_loader, test_loader, num_classes, classes, feat_dim = (
+        train_loader, val_loader, test_loader, num_classes, classes, feat_dim, display_names = (
             create_dataloaders()
         )
         print(f"\nClasses ({num_classes}): {classes[:10]}...")
         print(f"Feature dim: {feat_dim}")
 
+        # Show display names if available
+        if display_names:
+            print(f"\nDisplay names loaded: {len(display_names)}")
+            for norm, disp in list(display_names.items())[:5]:
+                print(f"  {norm} -> {disp}")
+
         seq, label = next(iter(train_loader))
-        print(f"Batch shape: {seq.shape}")  # (batch, seq_len, features)
+        print(f"\nBatch shape: {seq.shape}")  # (batch, seq_len, features)
 
     except ValueError as e:
         print(f"Error: {e}")

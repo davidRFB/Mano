@@ -1,4 +1,4 @@
 [core]
     remote = gdrive
 ['remote "gdrive"']
-    url = G:\My Drive\dvc-storage\mano
+    url = gdrive://1fABI6jpNW2FzDO3oBI2WkftEzQdZhiQG
