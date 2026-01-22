@@ -114,6 +114,7 @@ def save_checkpoint_to_mlflow(
     feature_mode: str,
     feature_dim: int,
     max_seq_len: int,
+    display_names: dict[str, str],
 ) -> str:
     """Save model checkpoint to MLflow artifacts."""
     if not mlflow.active_run():
@@ -135,6 +136,7 @@ def save_checkpoint_to_mlflow(
         "feature_mode": feature_mode,
         "feature_dim": feature_dim,
         "max_seq_len": max_seq_len,
+        "display_names": display_names,
     }
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -181,7 +183,7 @@ def train(
 
     # Create dataloaders
     print("\nLoading data...")
-    train_loader, val_loader, test_loader, num_classes, classes, feature_dim = (
+    train_loader, val_loader, test_loader, num_classes, classes, feature_dim, display_names = (
         create_dataloaders(
             batch_size=batch_size,
             feature_mode=feature_mode,
@@ -192,6 +194,7 @@ def train(
 
     print(f"Vocabulary size: {num_classes} words")
     print(f"Feature dimension: {feature_dim}")
+    print(f"Display names loaded: {len(display_names)}")
     print(f"Sample words: {classes[:10]}...")
 
     # Create model
@@ -299,6 +302,7 @@ def train(
                     feature_mode,
                     feature_dim,
                     max_seq_len,
+                    display_names,
                 )
                 print(f"  -> New best! Saved to MLflow")
             else:

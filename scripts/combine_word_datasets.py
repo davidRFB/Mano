@@ -3,6 +3,7 @@ Combine word video datasets via symlinks.
 
 Creates symlinks from INSOR and YouTube videos to a combined folder.
 Keeps all samples (including duplicates) for more training data.
+Also generates a display_names.json mapping normalized names to originals.
 
 Usage:
     python scripts/combine_word_datasets.py --dry-run   # preview
@@ -11,6 +12,7 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import unicodedata
 from collections import defaultdict
@@ -19,6 +21,28 @@ from pathlib import Path
 INSOR_DIR = Path("./data/webscrapping/insor_dataset/videos")
 YOUTUBE_DIR = Path("./data/webscrapping/youtube_dataset_proc")
 OUTPUT_DIR = Path("./data/webscrapping/combined_words")
+RAW_WORDS_DIR = Path("./data/raw_words")
+
+
+def get_display_name(filename: str) -> str:
+    """
+    Get display name from filename (preserves accents, uses underscores for spaces).
+
+    Examples:
+        "Niño.mp4" -> "niño"
+        "Yo Mismo.mp4" -> "yo_mismo"
+        "Mañana_2.mp4" -> "mañana"
+    """
+    name = Path(filename).stem
+    # Remove _2, _3 suffixes from YouTube duplicates
+    name = re.sub(r"_\d+$", "", name)
+    # Replace spaces with underscores
+    name = name.replace(" ", "_")
+    # Lowercase but keep accents
+    name = name.lower()
+    # Remove any characters that aren't letters, numbers, underscores, or accented chars
+    name = re.sub(r"[^a-záéíóúüñ0-9_]", "", name)
+    return name
 
 
 def normalize_name(filename: str) -> str:
@@ -58,35 +82,45 @@ def get_unique_path(base_path: Path, used_paths: set[Path]) -> Path:
         n += 1
 
 
-def collect_videos() -> tuple[list[tuple[Path, str, str]], dict[str, list[str]]]:
+def collect_videos() -> tuple[list[tuple[Path, str, str]], dict[str, list[str]], dict[str, str]]:
     """
     Collect all videos from both sources.
 
     Returns:
         videos: List of (path, normalized_label, source)
         word_samples: Dict mapping word -> list of sources
+        display_names: Dict mapping normalized_name -> display_name
     """
     videos = []
     word_samples: dict[str, list[str]] = defaultdict(list)
+    display_names: dict[str, str] = {}
 
     # INSOR single-word videos
     if INSOR_DIR.exists():
         for f in INSOR_DIR.iterdir():
             if f.suffix.lower() in {".mp4", ".m4v", ".mov"} and is_single_word(f.name):
                 label = normalize_name(f.name)
+                display = get_display_name(f.name)
                 if label:
                     videos.append((f, label, "insor"))
                     word_samples[label].append("insor")
+                    # Only store if different from normalized
+                    if display != label:
+                        display_names[label] = display
 
     # YouTube processed videos
     if YOUTUBE_DIR.exists():
         for f in YOUTUBE_DIR.glob("*.mp4"):
             label = normalize_name(f.name)
+            display = get_display_name(f.name)
             if label:
                 videos.append((f, label, "youtube"))
                 word_samples[label].append("youtube")
+                # Only store if different from normalized
+                if display != label and label not in display_names:
+                    display_names[label] = display
 
-    return videos, dict(word_samples)
+    return videos, dict(word_samples), display_names
 
 
 def show_statistics(word_samples: dict[str, list[str]]) -> None:
@@ -126,6 +160,28 @@ def show_statistics(word_samples: dict[str, list[str]]) -> None:
         print(f"  {word}: {len(sources)} ({source_str})")
 
 
+def save_display_names(display_names: dict[str, str], dry_run: bool = False) -> None:
+    """Save display names mapping to JSON file."""
+    output_file = RAW_WORDS_DIR / "display_names.json"
+
+    if dry_run:
+        print(f"\nWould save display names to: {output_file}")
+        print(f"  Entries: {len(display_names)}")
+        # Show some examples
+        examples = list(display_names.items())[:5]
+        for norm, disp in examples:
+            print(f"    {norm} -> {disp}")
+        if len(display_names) > 5:
+            print(f"    ... and {len(display_names) - 5} more")
+        return
+
+    RAW_WORDS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(display_names, f, ensure_ascii=False, indent=2, sort_keys=True)
+    print(f"\nSaved display names to: {output_file}")
+    print(f"  Entries: {len(display_names)}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Combine word datasets via symlinks")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
@@ -133,7 +189,7 @@ def main():
     args = parser.parse_args()
 
     # Collect all videos
-    videos, word_samples = collect_videos()
+    videos, word_samples, display_names = collect_videos()
 
     if not videos:
         print("No videos found!")
@@ -184,6 +240,9 @@ def main():
     else:
         print(f"Created: INSOR={created['insor']}, YouTube={created['youtube']}")
         print(f"Total: {created['insor'] + created['youtube']} | Skipped: {skipped}")
+
+    # Save display names mapping
+    save_display_names(display_names, dry_run=args.dry_run)
 
     print(f"\nNext steps:")
     print(f"  1. Extract landmarks:")
