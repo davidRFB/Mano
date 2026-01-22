@@ -5,7 +5,6 @@ __pycache__/
 
 # Data and models
 
-data/*
 models/*.pth
 models/*.json
 models/mlruns_*
