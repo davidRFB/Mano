@@ -444,7 +444,6 @@
             stabilityThreshold: 3,
             cooldownMs: 500,
             minConfidence: 0.25,
-            cropPadding: 50,
         };
 
         // ============ State ============
@@ -579,20 +578,6 @@
             updateWordDisplay();
         }
 
-        // ============ Get Hand Bounding Box ============
-        function getHandBbox(landmarks, width, height) {
-            const xCoords = landmarks.map(l => l.x * width);
-            const yCoords = landmarks.map(l => l.y * height);
-            
-            const padding = config.cropPadding;
-            const xMin = Math.max(0, Math.min(...xCoords) - padding);
-            const xMax = Math.min(width, Math.max(...xCoords) + padding);
-            const yMin = Math.max(0, Math.min(...yCoords) - padding);
-            const yMax = Math.min(height, Math.max(...yCoords) + padding);
-            
-            return { xMin, yMin, xMax, yMax };
-        }
-
         // ============ Landmark Colors (MUST match training data exactly) ============
         // These colors were used in add_landmarks_to_dataset.py
         const LANDMARK_COLORS = {
@@ -683,67 +668,18 @@
             });
         }
 
-        // ============ Draw Landmarks on Crop ============
-        // MUST match training data exactly (add_landmarks_to_dataset.py)
-        function drawLandmarksOnCrop(ctx, landmarks, bbox, cropWidth, cropHeight) {
-            // Convert landmarks to crop coordinates (mirrored to match the crop)
-            const cropLandmarks = landmarks.map(l => ({
-                // Mirror x coordinate since crop is mirrored
-                x: cropWidth - ((l.x * canvas.width) - bbox.xMin),
-                y: (l.y * canvas.height) - bbox.yMin
-            }));
-            
-            // Draw connections with correct colors
-            ctx.lineWidth = 2;
-            CONNECTION_GROUPS.forEach(group => {
-                ctx.strokeStyle = group.color;
-                group.connections.forEach(([i, j]) => {
-                    const p1 = cropLandmarks[i];
-                    const p2 = cropLandmarks[j];
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    ctx.stroke();
-                });
-            });
-            
-            // Draw landmarks with correct colors per finger
-            cropLandmarks.forEach((p, idx) => {
-                const color = getLandmarkColor(idx);
-                
-                // Outer circle (white outline)
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fill();
-                
-                // Inner circle (landmark color)
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 4, 0, 2 * Math.PI);
-                ctx.fillStyle = color;
-                ctx.fill();
-            });
-        }
-
-        // ============ Send to Backend ============
-        async function predictFromCrop(imageData) {
+        // ============ Send Landmarks to Backend ============
+        async function predictFromLandmarks(landmarks) {
             try {
-                // Convert canvas to blob
-                const blob = await new Promise(resolve => 
-                    imageData.toBlob(resolve, 'image/jpeg', 0.8)
-                );
-                
-                const formData = new FormData();
-                formData.append('file', blob, 'frame.jpg');
-                
+                const landmarkArray = landmarks.map(l => [l.x, l.y, l.z]);
                 const response = await fetch(`${config.apiUrl}/predict`, {
                     method: 'POST',
-                    body: formData,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ landmarks: landmarkArray }),
                 });
-                
+
                 if (response.ok) {
-                    const result = await response.json();
-                    return result;
+                    return response.json();
                 }
             } catch (error) {
                 console.error('Prediction error:', error);
@@ -800,79 +736,40 @@
             minTrackingConfidence: 0.5
         });
 
-        // Temp canvas for cropping
-        const cropCanvas = document.createElement('canvas');
-        const cropCtx = cropCanvas.getContext('2d');
-
         hands.onResults(async (results) => {
             state.frameCount++;
-            
+
             // Clear and draw mirrored video
             ctx.save();
             ctx.scale(-1, 1);
             ctx.drawImage(results.image, -canvas.width, 0, canvas.width, canvas.height);
             ctx.restore();
-            
+
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 state.handDetected = true;
                 noHandMessage.style.display = 'none';
-                
+
                 const landmarks = results.multiHandLandmarks[0];
-                
-                // Draw landmarks on display canvas with EXACT training colors
+
+                // Draw landmarks on display canvas for visual feedback
                 drawLandmarksOnDisplay(ctx, landmarks, canvas.width, canvas.height, true);
-                
-                // Get bbox and draw (need to mirror x coordinates)
-                const bbox = getHandBbox(landmarks, canvas.width, canvas.height);
-                // Mirror the bbox for display
-                const mirroredXMin = canvas.width - bbox.xMax;
-                const mirroredXMax = canvas.width - bbox.xMin;
-                
-                ctx.strokeStyle = state.currentConfidence > 0.8 ? '#00FF00' : '#FFCC00';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(mirroredXMin, bbox.yMin, mirroredXMax - mirroredXMin, bbox.yMax - bbox.yMin);
-                
+
                 // Skip prediction if in cooldown
                 if (state.inCooldown) {
                     return;
                 }
-                
+
                 // Throttle predictions (max ~10 per second)
                 const now = Date.now();
                 if (now - state.lastPredictionTime < 100) {
                     return;
                 }
                 state.lastPredictionTime = now;
-                
-                // Crop hand region from original (non-mirrored) image
-                const cropWidth = bbox.xMax - bbox.xMin;
-                const cropHeight = bbox.yMax - bbox.yMin;
-                
-                if (cropWidth > 10 && cropHeight > 10) {
-                    cropCanvas.width = cropWidth;
-                    cropCanvas.height = cropHeight;
-                    
-                    // Draw cropped region AND MIRROR IT (to match inference.py behavior)
-                    // inference.py mirrors the frame BEFORE cropping, so the model
-                    // was trained on mirrored images. We need to mirror the crop.
-                    cropCtx.save();
-                    cropCtx.scale(-1, 1);
-                    cropCtx.drawImage(
-                        results.image,
-                        bbox.xMin, bbox.yMin, cropWidth, cropHeight,
-                        -cropWidth, 0, cropWidth, cropHeight
-                    );
-                    cropCtx.restore();
-                    
-                    // Draw landmarks on the crop (matching inference.py which draws before cropping)
-                    // This is important because the model may have learned to expect landmarks
-                    drawLandmarksOnCrop(cropCtx, landmarks, bbox, cropWidth, cropHeight);
-                    
-                    // Send to backend
-                    const result = await predictFromCrop(cropCanvas);
-                    if (result) {
-                        processPrediction(result.letter, result.confidence);
-                    }
+
+                // Send landmarks directly to backend
+                const result = await predictFromLandmarks(landmarks);
+                if (result) {
+                    processPrediction(result.letter, result.confidence);
                 }
             } else {
                 state.handDetected = false;
@@ -880,12 +777,12 @@
                 predictionOverlay.style.display = 'none';
                 stabilityBar.style.display = 'none';
                 stabilityLabel.style.display = 'none';
-                
+
                 // Reset stability when hand disappears
                 state.stabilityCounter = 0;
                 state.lastStableLetter = null;
             }
-            
+
             updateWordDisplay();
         });
 
