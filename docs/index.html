@@ -111,18 +111,23 @@
                 padding: 0;
             }
             .word-display {
-                padding: 10px 12px;
-                min-height: auto;
+                padding: 8px 10px;
+                min-height: 0;
+                height: 40px;
                 margin-bottom: 0;
-                border-radius: 10px;
+                border-radius: 8px;
                 overflow-x: auto;
+                overflow-y: hidden;
                 justify-content: flex-start;
             }
             .word-display .word {
-                font-size: 1.6rem;
-                letter-spacing: 2px;
+                font-size: 1.2rem;
+                letter-spacing: 1px;
                 white-space: nowrap;
                 word-break: normal;
+            }
+            .word-display .placeholder {
+                font-size: 0.8rem;
             }
             .prediction-overlay {
                 padding: 8px 14px;
