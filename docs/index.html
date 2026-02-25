@@ -104,14 +104,18 @@
                 padding: 0;
             }
             .word-display {
-                padding: 12px;
-                min-height: 50px;
+                padding: 10px 12px;
+                min-height: auto;
                 margin-bottom: 0;
                 border-radius: 10px;
+                overflow-x: auto;
+                justify-content: flex-start;
             }
             .word-display .word {
-                font-size: 1.8rem;
+                font-size: 1.6rem;
                 letter-spacing: 2px;
+                white-space: nowrap;
+                word-break: normal;
             }
             .prediction-overlay {
                 padding: 8px 14px;
@@ -401,6 +405,20 @@
         }
         
         
+        .btn-flip {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: white;
+            line-height: 1;
+        }
+        .btn-flip:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         .no-hand-message {
             position: absolute;
             bottom: 20px;
@@ -465,7 +483,10 @@
                         <div class="status-dot" id="statusDot"></div>
                         <span id="statusText">Starting camera...</span>
                     </div>
-                    <div id="fpsCounter">0 FPS</div>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <button class="btn-flip" id="btnFlipCamera" title="Flip camera">🔄</button>
+                        <div id="fpsCounter">0 FPS</div>
+                    </div>
                 </div>
             </div>
             
@@ -540,6 +561,8 @@
             predictionCount: 0,
             handDetected: false,
             lastPredictionTime: 0,
+            facingMode: 'user',
+            cameraInstance: null,
         };
 
         // ============ DOM Elements ============
@@ -801,11 +824,18 @@
 
         hands.onResults(async (results) => {
             state.frameCount++;
+            frames++;
 
-            // Clear and draw mirrored video
+            const mirrored = state.facingMode === 'user';
+
+            // Clear and draw video (mirrored for front camera)
             ctx.save();
-            ctx.scale(-1, 1);
-            ctx.drawImage(results.image, -canvas.width, 0, canvas.width, canvas.height);
+            if (mirrored) {
+                ctx.scale(-1, 1);
+                ctx.drawImage(results.image, -canvas.width, 0, canvas.width, canvas.height);
+            } else {
+                ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            }
             ctx.restore();
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -815,7 +845,7 @@
                 const landmarks = results.multiHandLandmarks[0];
 
                 // Draw landmarks on display canvas for visual feedback
-                drawLandmarksOnDisplay(ctx, landmarks, canvas.width, canvas.height, true);
+                drawLandmarksOnDisplay(ctx, landmarks, canvas.width, canvas.height, mirrored);
 
                 // Skip prediction if in cooldown
                 if (state.inCooldown) {
@@ -852,12 +882,21 @@
         // ============ Camera Setup ============
         async function startCamera() {
             try {
+                // Stop existing stream if any
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(t => t.stop());
+                }
+                if (state.cameraInstance) {
+                    state.cameraInstance.stop();
+                    state.cameraInstance = null;
+                }
+
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 640, height: 480, facingMode: 'user' }
+                    video: { width: 640, height: 480, facingMode: state.facingMode }
                 });
-                
+
                 video.srcObject = stream;
-                
+
                 await new Promise(resolve => {
                     video.onloadedmetadata = () => {
                         canvas.width = video.videoWidth;
@@ -865,10 +904,10 @@
                         resolve();
                     };
                 });
-                
+
                 statusDot.classList.add('active');
                 statusText.textContent = 'Camera active - Show hand gestures!';
-                
+
                 // Start processing loop
                 const camera = new Camera(video, {
                     onFrame: async () => {
@@ -877,28 +916,32 @@
                     width: 640,
                     height: 480
                 });
-                
+
                 camera.start();
-                
-                // FPS counter
-                let lastTime = performance.now();
-                let frames = 0;
-                setInterval(() => {
-                    const now = performance.now();
-                    const fps = Math.round(frames * 1000 / (now - lastTime));
-                    fpsCounter.textContent = `${fps} FPS`;
-                    frames = 0;
-                    lastTime = now;
-                }, 1000);
-                
-                // Count frames in onResults instead
-                const originalOnResults = hands.onResults.bind(hands);
-                
+                state.cameraInstance = camera;
+
             } catch (error) {
                 console.error('Camera error:', error);
                 statusText.textContent = 'Camera access denied or not available';
             }
         }
+
+        // ============ Flip Camera ============
+        document.getElementById('btnFlipCamera').addEventListener('click', () => {
+            state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+            startCamera();
+        });
+
+        // ============ FPS Counter ============
+        let lastTime = performance.now();
+        let frames = 0;
+        setInterval(() => {
+            const now = performance.now();
+            const fps = Math.round(frames * 1000 / (now - lastTime));
+            fpsCounter.textContent = `${fps} FPS`;
+            frames = 0;
+            lastTime = now;
+        }, 1000);
 
         // ============ Initialize ============
         startCamera();
