@@ -45,10 +45,99 @@
             gap: 20px;
             margin-top: 20px;
         }
-        
+
+        .word-display-bar {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .video-section {
+            grid-column: 1;
+            grid-row: 1 / 3;
+        }
+
+        .word-section {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
         @media (max-width: 900px) {
             .main-content {
                 grid-template-columns: 1fr;
+            }
+            .word-display-bar {
+                grid-column: 1;
+                grid-row: auto;
+                order: -1;
+            }
+            .video-section {
+                grid-column: 1;
+                grid-row: auto;
+                order: 0;
+            }
+            .word-section {
+                grid-column: 1;
+                grid-row: auto;
+                order: 1;
+            }
+            .container {
+                padding: 10px;
+            }
+            header {
+                padding: 8px 0;
+            }
+            header h1 {
+                font-size: 1.4rem;
+                margin-bottom: 4px;
+            }
+            header p {
+                font-size: 0.85rem;
+            }
+            .main-content {
+                margin-top: 10px;
+                gap: 10px;
+            }
+            .video-section, .word-section {
+                padding: 12px;
+            }
+            .word-display-bar {
+                padding: 0;
+            }
+            .word-display {
+                padding: 12px;
+                min-height: 50px;
+                margin-bottom: 0;
+                border-radius: 10px;
+            }
+            .word-display .word {
+                font-size: 1.8rem;
+                letter-spacing: 2px;
+            }
+            .prediction-overlay {
+                padding: 8px 14px;
+                border-radius: 8px;
+            }
+            .prediction-overlay .letter {
+                font-size: 2.5rem;
+            }
+            .prediction-overlay .confidence {
+                font-size: 0.8rem;
+            }
+            .letter-history .letter-chip {
+                padding: 3px 8px;
+                font-size: 0.75rem;
+            }
+            .letter-history {
+                gap: 5px;
+                margin-top: 10px;
+            }
+            .controls {
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+            .btn {
+                padding: 10px 14px;
+                font-size: 0.9rem;
             }
         }
         
@@ -167,6 +256,12 @@
             50% { opacity: 0.5; }
         }
         
+        .word-display-bar {
+            background: #0f0f23;
+            border-radius: 16px;
+            padding: 20px;
+        }
+
         .word-section {
             background: #0f0f23;
             border-radius: 16px;
@@ -187,7 +282,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
         }
         
         .word-display .word {
@@ -306,19 +400,6 @@
             margin-bottom: 5px;
         }
         
-        .cooldown-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 165, 0, 0.9);
-            padding: 20px 40px;
-            border-radius: 12px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #000;
-            display: none;
-        }
         
         .no-hand-message {
             position: absolute;
@@ -354,6 +435,13 @@
         </header>
         
         <div class="main-content">
+            <div class="word-display-bar">
+                <div class="word-display">
+                    <span class="word" id="wordDisplay"></span>
+                    <span class="placeholder" id="wordPlaceholder">Show gestures to spell</span>
+                </div>
+            </div>
+
             <div class="video-section">
                 <div class="video-container">
                     <video id="video" autoplay playsinline></video>
@@ -369,7 +457,6 @@
                         <div class="progress" id="stabilityProgress"></div>
                     </div>
                     
-                    <div class="cooldown-overlay" id="cooldownOverlay">✓ Captured!</div>
                     <div class="no-hand-message" id="noHandMessage">No hand detected</div>
                 </div>
                 
@@ -384,12 +471,7 @@
             
             <div class="word-section">
                 <h2>📝 Word Builder</h2>
-                
-                <div class="word-display">
-                    <span class="word" id="wordDisplay"></span>
-                    <span class="placeholder" id="wordPlaceholder">Show gestures to spell</span>
-                </div>
-                
+
                 <div class="controls">
                     <button class="btn btn-secondary" id="btnBackspace">⬅️ Backspace</button>
                     <button class="btn btn-danger" id="btnClear">🗑️ Clear</button>
@@ -470,7 +552,6 @@
         const stabilityBar = document.getElementById('stabilityBar');
         const stabilityProgress = document.getElementById('stabilityProgress');
         const stabilityLabel = document.getElementById('stabilityLabel');
-        const cooldownOverlay = document.getElementById('cooldownOverlay');
         const noHandMessage = document.getElementById('noHandMessage');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -534,47 +615,29 @@
 
         // ============ Capture Letter ============
         function captureLetter(letter) {
-            // Prevent duplicate consecutive letters
+            // Silently skip duplicate consecutive letters
             const lastLetter = state.wordBuffer[state.wordBuffer.length - 1];
             if (lastLetter === letter) {
-                // Same letter as last one - skip adding but still cooldown
-                console.log(`Skipping duplicate letter: ${letter}`);
                 state.stabilityCounter = 0;
                 state.lastStableLetter = null;
                 state.inCooldown = true;
-                
-                // Show "duplicate skipped" feedback
-                cooldownOverlay.textContent = `${letter.toUpperCase()} (skip duplicate)`;
-                cooldownOverlay.style.background = 'rgba(150, 150, 150, 0.9)';
-                cooldownOverlay.style.display = 'block';
-                setTimeout(() => {
-                    cooldownOverlay.style.display = 'none';
-                    cooldownOverlay.textContent = '✓ Captured!';
-                    cooldownOverlay.style.background = 'rgba(255, 165, 0, 0.9)';
-                    state.inCooldown = false;
-                }, config.cooldownMs);
-                
-                updateWordDisplay();
+                setTimeout(() => { state.inCooldown = false; }, config.cooldownMs);
                 return;
             }
-            
+
             // New letter - add to buffer
             state.wordBuffer.push(letter);
             state.stabilityCounter = 0;
             state.lastStableLetter = null;
             state.inCooldown = true;
-            
-            // Show capture feedback
-            cooldownOverlay.textContent = `✓ ${letter.toUpperCase()}`;
-            cooldownOverlay.style.background = 'rgba(0, 200, 100, 0.9)';
-            cooldownOverlay.style.display = 'block';
+
+            // Brief green flash on prediction overlay as feedback
+            predictionOverlay.style.background = 'rgba(0, 200, 100, 0.95)';
             setTimeout(() => {
-                cooldownOverlay.style.display = 'none';
-                cooldownOverlay.textContent = '✓ Captured!';
-                cooldownOverlay.style.background = 'rgba(255, 165, 0, 0.9)';
+                predictionOverlay.style.background = '';
                 state.inCooldown = false;
             }, config.cooldownMs);
-            
+
             updateWordDisplay();
         }
 
