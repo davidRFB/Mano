@@ -97,8 +97,15 @@
                 margin-top: 10px;
                 gap: 10px;
             }
-            .video-section, .word-section {
+            .video-section {
+                padding: 6px;
+                border-radius: 10px;
+            }
+            .word-section {
                 padding: 12px;
+            }
+            .status-bar {
+                display: none;
             }
             .word-display-bar {
                 padding: 0;
@@ -406,17 +413,25 @@
         
         
         .btn-flip {
-            background: rgba(255, 255, 255, 0.15);
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
             border: none;
-            border-radius: 6px;
-            padding: 4px 10px;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
             font-size: 1.1rem;
             cursor: pointer;
             color: white;
             line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .btn-flip:active {
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.7);
         }
 
         .no-hand-message {
@@ -475,18 +490,16 @@
                         <div class="progress" id="stabilityProgress"></div>
                     </div>
                     
+                    <button class="btn-flip" id="btnFlipCamera" title="Flip camera">🔄</button>
                     <div class="no-hand-message" id="noHandMessage">No hand detected</div>
                 </div>
-                
+
                 <div class="status-bar">
                     <div class="status-indicator">
                         <div class="status-dot" id="statusDot"></div>
                         <span id="statusText">Starting camera...</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <button class="btn-flip" id="btnFlipCamera" title="Flip camera">🔄</button>
-                        <div id="fpsCounter">0 FPS</div>
-                    </div>
+                    <div id="fpsCounter">0 FPS</div>
                 </div>
             </div>
             
@@ -535,9 +548,8 @@
         </div>
     </div>
 
-    <!-- MediaPipe Hands -->
+    <!-- MediaPipe Hands (no camera_utils - we manage the stream ourselves) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
     <script>
@@ -562,7 +574,7 @@
             handDetected: false,
             lastPredictionTime: 0,
             facingMode: 'user',
-            cameraInstance: null,
+            animFrameId: null,
         };
 
         // ============ DOM Elements ============
@@ -882,13 +894,15 @@
         // ============ Camera Setup ============
         async function startCamera() {
             try {
-                // Stop existing stream if any
+                // Stop existing frame loop
+                if (state.animFrameId) {
+                    cancelAnimationFrame(state.animFrameId);
+                    state.animFrameId = null;
+                }
+
+                // Stop existing stream
                 if (video.srcObject) {
                     video.srcObject.getTracks().forEach(t => t.stop());
-                }
-                if (state.cameraInstance) {
-                    state.cameraInstance.stop();
-                    state.cameraInstance = null;
                 }
 
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -896,29 +910,25 @@
                 });
 
                 video.srcObject = stream;
+                await video.play();
 
-                await new Promise(resolve => {
-                    video.onloadedmetadata = () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        resolve();
-                    };
-                });
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
                 statusDot.classList.add('active');
-                statusText.textContent = 'Camera active - Show hand gestures!';
+                statusText.textContent = 'Camera active';
 
-                // Start processing loop
-                const camera = new Camera(video, {
-                    onFrame: async () => {
+                // Manual frame loop — no MediaPipe Camera utility
+                let processing = false;
+                async function processFrame() {
+                    if (!processing && video.readyState >= 2) {
+                        processing = true;
                         await hands.send({ image: video });
-                    },
-                    width: 640,
-                    height: 480
-                });
-
-                camera.start();
-                state.cameraInstance = camera;
+                        processing = false;
+                    }
+                    state.animFrameId = requestAnimationFrame(processFrame);
+                }
+                state.animFrameId = requestAnimationFrame(processFrame);
 
             } catch (error) {
                 console.error('Camera error:', error);
