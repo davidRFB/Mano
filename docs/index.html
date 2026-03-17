@@ -586,6 +586,9 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+
+        // Offscreen canvas to feed MediaPipe (avoids WebGL issues with raw video on some GPUs)
+        const offscreen = document.createElement('canvas');
         const predictionOverlay = document.getElementById('predictionOverlay');
         const predictionLetter = document.getElementById('predictionLetter');
         const predictionConfidence = document.getElementById('predictionConfidence');
@@ -923,12 +926,19 @@
                 statusDot.classList.add('active');
                 statusText.textContent = 'Camera active';
 
-                // Manual frame loop — no MediaPipe Camera utility
+                // Sync offscreen canvas size
+                offscreen.width = video.videoWidth;
+                offscreen.height = video.videoHeight;
+                const offCtx = offscreen.getContext('2d');
+
+                // Manual frame loop — draw to offscreen canvas first to avoid
+                // WebGL context creation failures on some laptop GPUs
                 let processing = false;
                 async function processFrame() {
                     if (!processing && video.readyState >= 2) {
                         processing = true;
-                        await hands.send({ image: video });
+                        offCtx.drawImage(video, 0, 0);
+                        await hands.send({ image: offscreen });
                         processing = false;
                     }
                     state.animFrameId = requestAnimationFrame(processFrame);
