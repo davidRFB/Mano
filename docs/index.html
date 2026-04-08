@@ -449,6 +449,50 @@
             font-size: 0.9rem;
             display: none;
         }
+
+        /* Model loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 15, 35, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 6px solid #1a1a3e;
+            border-top-color: #00cc88;
+            animation: spin 1s linear infinite;
+            margin-bottom: 24px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text {
+            font-size: 1.2rem;
+            color: #ccc;
+            text-align: center;
+            max-width: 320px;
+        }
+        .loading-subtext {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
         
         .letter-history {
             display: flex;
@@ -466,6 +510,12 @@
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingText">Waking up the model...</div>
+        <div class="loading-subtext" id="loadingSubtext">The server sleeps when idle. This may take 30-60 seconds.</div>
+    </div>
+
     <div class="container">
         <header>
             <h1>🤟 Mano LSC Translator</h1>
@@ -523,11 +573,6 @@
                     <h3>⚙️ Settings</h3>
                     
                     <div class="setting-row">
-                        <label>API URL</label>
-                        <input type="text" id="apiUrl" value="https://davidrfb97-mano.hf.space">
-                    </div>
-                    
-                    <div class="setting-row">
                         <label>Stability Threshold <span class="range-value" id="stabilityValue">3</span></label>
                         <input type="range" id="stabilityThreshold" min="2" max="8" value="3">
                     </div>
@@ -559,8 +604,10 @@
 
     <script>
         // ============ Configuration ============
+        const _h = 'hf.space';
+        const _u = 'davidrfb97-mano';
         const config = {
-            apiUrl: 'https://davidrfb97-mano.hf.space',
+            apiUrl: `https://${_u}.${_h}`,
             stabilityThreshold: 3,
             cooldownMs: 500,
             minConfidence: 0.25,
@@ -604,10 +651,6 @@
         const fpsCounter = document.getElementById('fpsCounter');
 
         // ============ Settings Handlers ============
-        document.getElementById('apiUrl').addEventListener('change', (e) => {
-            config.apiUrl = e.target.value;
-        });
-
         document.getElementById('stabilityThreshold').addEventListener('input', (e) => {
             config.stabilityThreshold = parseInt(e.target.value);
             document.getElementById('stabilityValue').textContent = e.target.value;
@@ -968,8 +1011,42 @@
             lastTime = now;
         }, 1000);
 
+        // ============ Wake up HF Space ============
+        async function wakeUpModel() {
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            const loadingSubtext = document.getElementById('loadingSubtext');
+            const maxRetries = 30;
+            let attempt = 0;
+
+            while (attempt < maxRetries) {
+                try {
+                    const res = await fetch(`${config.apiUrl}/health`, {
+                        method: 'GET',
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (res.ok) {
+                        loadingText.textContent = 'Model ready!';
+                        loadingSubtext.textContent = '';
+                        setTimeout(() => overlay.classList.add('hidden'), 600);
+                        return;
+                    }
+                } catch (e) {
+                    // Space is still waking up
+                }
+                attempt++;
+                loadingText.textContent = `Waking up the model...`;
+                loadingSubtext.textContent = `The server sleeps when idle. This may take up to a minute. (attempt ${attempt}/${maxRetries})`;
+                await new Promise(r => setTimeout(r, 3000));
+            }
+
+            loadingText.textContent = 'Could not reach the model server';
+            loadingSubtext.textContent = 'The server might be down. Try refreshing later.';
+        }
+
         // ============ Initialize ============
         startCamera();
+        wakeUpModel();
     </script>
 </body>
 </html>
