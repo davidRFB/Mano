@@ -1,58 +1,40 @@
 # =============================================================================
-# LSC-Connect API Dockerfile (Optimized - CPU Only)
+# LSC Gesture Recognition API (CPU Only)
 # =============================================================================
-# Build:  docker build -f Dockerfile.cpu -t mano:cpu .
-# Run:    docker run -p 8000:8000 mano:cpu
+# Build:  docker build -t mano-api .
+# Run:    docker run -p 8000:8000 mano-api
+#
+# Hugging Face Spaces (port 7860):
+#   Automatically handled via PORT env var
 # =============================================================================
 
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (libgl1 replaces deprecated libgl1-mesa-glx)
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install PyTorch CPU-only FIRST (smaller download)
+# Install PyTorch CPU-only (smaller image)
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# Copy and install other requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install API dependencies
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
 
-# Copy source code
-#COPY src/ ./src/
-
-# Copy ONLY the MLflow data we need:
-# 1. The "0" folder contains MLflow metadata
-# 2. Your experiment folder contains your run
-#
-# To find your experiment folder, look in models/mlruns/ for a folder
-# that contains your run_id (587ca0fd066a4a1fbf1a5a26971c3284)
-#
-# UPDATE THE LINE BELOW with your experiment folder name!
-#COPY ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284  ./models/mlruns/585384752700443665/587ca0fd066a4a1fbf1a5a26971c3284
-
-# --- HUGGING FACE SPECIFIC SETTINGS ---
-
-# 1. Create a non-root user (required by HF Spaces)
+# --- Hugging Face Spaces: non-root user ---
 RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
-	PATH=/home/user/.local/bin:$PATH
+    PATH=/home/user/.local/bin:$PATH
 
-# 2. Set the working directory to the user's home
 WORKDIR $HOME/app
 
-# 3. Copy files into the user's directory & take ownership
-COPY --chown=user . $HOME/app
+# Copy only what the API needs
+COPY --chown=user src/preprocessing/ src/preprocessing/
+COPY --chown=user src/models/ src/models/
+COPY --chown=user src/__init__.py src/__init__.py
+COPY --chown=user api/main.py api/main.py
+COPY --chown=user api/model.pth api/model.pth
 
-# 4. Expose the magic port 7860
 EXPOSE 7860
 
-# 5. Run Uvicorn on port 7860
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "7860"]
-
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]

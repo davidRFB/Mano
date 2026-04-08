@@ -2,7 +2,7 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+data/raw_photo_landmark/
 # Data and models
 
 models/*.pth
