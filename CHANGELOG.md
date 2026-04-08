@@ -6,6 +6,66 @@ Format: `## [Version] - YYYY-MM-DD`
 
 ---
 
+## [0.5.1] - 2026-02-25
+
+### Added
+- **Web frontend landmark-based prediction** (`docs/index.html`)
+  - Sends raw landmark coordinates as JSON to API v2.1 (no more image crops)
+  - Simpler, faster — no JPEG encoding/transfer overhead
+- **Camera flip button** — toggle front/rear camera on mobile
+  - Replaced MediaPipe Camera utility with manual `requestAnimationFrame` loop
+    for reliable `facingMode` switching
+  - Auto-disables mirroring for rear camera
+
+### Changed
+- **Mobile UI polish**
+  - Word display bar moved above camera feed (title → letters → camera)
+  - Fixed-height word display (40px) with horizontal scroll — no more layout shift
+  - Smaller title, letter chips, and tighter spacing
+  - Status bar hidden on mobile, minimal video section padding
+- **Capture feedback simplified**
+  - Removed big centered "Captured!" overlay
+  - Brief green flash on prediction badge instead
+  - Duplicate letters silently skipped (no visual message)
+
+### Removed
+- `drawLandmarksOnCrop()`, `getHandBbox()`, `predictFromCrop()` — dead code from old image-upload API
+- MediaPipe `camera_utils.js` dependency — replaced with manual frame loop
+
+## [0.5.0] - 2026-02-25
+
+### Added
+- **`xy_angles_distances` feature mode** as new best performer (66 features)
+  - 10 key distances (fingertip spreads, palm width) help separate R/V/Z confusion
+  - Static model: 77.8% → **97.0% test accuracy** with distance features
+- **`--static-frame-override` flag** in training script
+  - Allows per-class frame selection for static models (e.g., `j:18`)
+  - J letter uses frame 18 (end of motion) instead of frame 0, enabling static classification
+- **API v2.1** (`api/main.py`) - Landmark-based prediction
+  - Accepts single frame `{"landmarks": [...]}` or sequence `{"frames": [...]}`
+  - Loads model directly from `.pth` checkpoint (no MLflow dependency at runtime)
+  - Deployed to Hugging Face Spaces (Docker)
+- **Dataset expanded** to 214 samples across 27 classes (from 69)
+  - Targeted collection for confusable letters (R, V, N, Q, X)
+
+### Changed
+- **Ñ display fixed** — replaced Unicode "Ñ" with "NN" in all OpenCV `putText` calls
+  (OpenCV doesn't support Unicode, was showing "??")
+- **Dockerfile** rewritten for lean deployment
+  - No MLflow/scikit-learn at runtime, just PyTorch + FastAPI
+  - Model shipped as `api/model.pth` (236 KB, self-contained with config)
+- **`05_evaluate.py`** — fixed unpacking bug for `create_dataloaders` return value
+
+### Removed
+- `src/api/` — old image-upload API replaced by `api/main.py` (landmark-based)
+- `api/Dockerfile` — consolidated into root `Dockerfile`
+
+### Model Results
+- Best static model: `static_xy_angles_dist` (run `81b912ec`)
+  - Features: `xy_angles_distances` (66 dim)
+  - 97.0% test accuracy, 96.9% val accuracy
+  - Per-class: R 25% → improved, V 70% → improved with distance features
+
 ## [Unreleased]
 
 ### Changed

@@ -1,66 +1,221 @@
-# GEMINI.md - Project Context & Guidelines
+# CLAUDE.md - AI Assistant Guidelines
 
-## Project Overview
-**MANO** is a Colombian Sign Language (LSC) translation system. It utilizes a pipeline of Computer Vision (MediaPipe), Deep Learning (PyTorch), and Large Language Models (LLM) to translate static gestures (letters) and dynamic sequences (words) into text.
+## Project Context
+MANO: Colombian Sign Language translator using CV model + LLM pipeline.
 
-The project emphasizes a clean, structured workflow from data capture to deployment, supporting both static frames (letters) and movement-based gestures (dynamic letters, whole words).
-
-## Core Mandates
-- **Simplicity & Cleanliness**: Prioritize simple, readable code over complex abstractions. Maintain clean pipelines.
-- **Idiomatic Python**: Follow PEP 8, use type hints, and adhere to the project's existing style (Black formatter).
-- **Ask Before Assuming**: If requirements for a pipeline step are ambiguous, ask for clarification.
-- **Documentation**: Update `CHANGELOG.md` and `STRUCTURE.md` when features are completed and explicitly finalized by the user.
-
-## Architecture & Workflows
-
-### Script Pipeline (The "Golden Path")
-The project follows a strict numbered workflow for reproducibility. Always adhere to this sequence:
-
-1.  **`scripts/01_capture_static.py`**: Capture single-frame data (Static Letters).
-    *   Modes: `photo`, `photo_landmarks`, `landmarks`.
-2.  **`scripts/02_capture_dynamic.py`**: Capture sequence data (Dynamic Letters).
-    *   Modes: `landmarks`, `video`, `both`.
-3.  **`scripts/03_capture_words.py`**: Capture word gestures (Holistic).
-    *   Uses MediaPipe Holistic (51 landmarks: 9 pose + 21 L-hand + 21 R-hand).
-4.  **`scripts/04_train.py`**: Train models.
-    *   Supports various architectures (GRU, BiGRU, LSTM) and feature modes.
-    *   Tracks experiments via MLflow.
-5.  **`scripts/05_evaluate.py`**: Evaluate models and generate metrics/plots.
-6.  **`scripts/06_demo.py`**: Real-time demonstration/inference.
-
-### Directory Structure
-- **`src/`**: Core library code.
-    - `data/`: Preprocessing, Dataset classes, feature extraction.
-    - `models/`: PyTorch model architectures (Static MLP, Dynamic RNNs).
-    - `training/`: Training loops, trainers, and metrics.
-    - `inference/`: Real-time prediction logic and predictors.
-    - `llm/`: Word correction (Groq/Ollama) and autocompletion.
-- **`data/`**: Storage for raw images, landmarks (`.npy`), and DVC files.
-- **`models/`**: Checkpoints (`checkpoints/`) and MLflow runs (`mlruns/`).
-- **`api/`**: FastAPI implementation for deployment.
-- **`blog/`**: Project documentation and experiment logging (Quarto).
+## Core Principles
+- **Ask, don't assume**: When requirements are ambiguous, ask clarifying questions
+- **Concise over verbose**: Short, clear explanations. No unnecessary elaboration
+- **Show, don't tell**: Provide working code examples, not theoretical explanations
+- **Incremental changes**: Small, testable modifications over large refactors. DO NOT MAKE MASSIVE CHANGES WITHOUT PRIOR DISCUSSION
+- **Follow existing patterns**: Match coding style and structure already present in the codebase
+---
 
 ## Coding Standards
 
-### Python
-- **Formatter**: Black (line length 88).
-- **Linter**: Flake8.
-- **Type Hints**: Mandatory for function signatures.
-- **Docstrings**: Google style for public interfaces.
-- **Imports**: Absolute imports preferred.
+### Python Style
+- **Formatter**: Black (line length: 88)
+- **Linter**: Flake8
+- **Type hints**: Required for all functions
+- **Docstrings**: Google style for public functions only
+- **Imports**: Absolute imports, grouped (stdlib → third-party → local)
+- Use micromamba env called Mano
 
-### MLOps
-- **Experiment Tracking**: MLflow for metrics, parameters, and artifacts.
-- **Data Versioning**: DVC for `data/raw` and other large datasets.
-- **Environment**: `requirements.txt` or Micromamba environment `Mano`.
+```python
+# Good
+def predict_gesture(image: np.ndarray, model: torch.nn.Module) -> dict[str, float]:
+    """Predict gesture from image."""
+    pass
 
-## Key Technologies
-- **Computer Vision**: MediaPipe (Hands & Holistic).
-- **Deep Learning**: PyTorch (MobileNet, ResNet for images; GRU/LSTM for landmarks).
-- **Deployment**: FastAPI, Docker.
-- **LLM**: Groq / Ollama for post-processing corrections.
+# Bad
+def predict_gesture(image, model):
+    '''
+    This function takes an image and a model and returns predictions...
+    '''
+    pass
+```
 
-## Operational Guide
-- **Data Flow**: `Capture` -> `Preprocess (.npy)` -> `Train` -> `Evaluate` -> `Deploy`.
-- **Feature Modes**: Be aware of different feature sets for landmarks (e.g., `xy`, `xy_angles`, `full`).
-- **Blog**: Documentation of the journey lives in `blog/`. Update `.qmd` files if requested to document findings or add figures.
+### Project Structure Awareness
+- **Always check STRUCTURE.md** before creating new files 
+- **Update CHANGELOG.md** when adding features or making significant changes. Make sure they are finished to update. Wait for user input explicitly saying the feature is finished.
+- **Follow existing patterns** - if similar code exists, match its style
+
+### Testing
+- Test file naming: `test_*.py`
+- One test file per module
+- Use pytest fixtures for setup
+- Aim for >80% coverage
+
+
+
+### Git Workflow
+- Branch naming: `feature/`, `fix/`, `refactor/`
+- Commits: Imperative mood, concise ("Add prediction endpoint" not "Added prediction endpoint")
+- **Update CHANGELOG.md** before merging to main
+
+---
+
+## File Organization
+
+### Key Reference Files
+- **STRUCTURE.md**: Complete file structure and descriptions
+- **CHANGELOG.md**: Feature additions, changes, and fixes
+- **README.md**: User-facing documentation
+
+### Before Creating New Files
+1. Check STRUCTURE.md to see if file/location already exists
+2. Follow existing naming patterns
+3. Update STRUCTURE.md only when a feature is finished. A conversation can go for a while before a feature is finished.  Wait for user input explicitly saying the feature is finished.
+
+---
+
+## Development Workflow
+
+### When Adding Features
+1. **Understand context**: Read relevant sections of STRUCTURE.md
+2. **Plan changes**: Ask questions if unclear
+3. **Implement incrementally**: One logical unit at a time
+4. **Test immediately**: Don't accumulate untested code
+5. **Update documentation**: CHANGELOG.md + STRUCTURE.md if needed. 
+6. We are also documenting the progress for a blog in the folder blog/. there we will add files in md file but also will be the output place for the plots we generate with notebooks.
+
+### When Debugging
+1. **Reproduce first**: Ensure you understand the problem
+2. **Minimal changes**: Fix the issue, don't refactor unnecessarily
+3. **Add test**: Prevent regression
+
+### When Refactoring
+1. **Justify need**: Explain why refactoring is necessary
+2. **Preserve behavior**: Tests should still pass
+3. **One thing at a time**: Don't mix refactoring with features
+
+---
+
+## MLOps Conventions
+
+### Experiment Tracking (MLflow)
+- Log all hyperparameters
+- Log metrics every epoch
+- Save model artifacts with version tags
+- Use descriptive run names: `mobilenetv2_lr0.001_aug_heavy`
+
+### Model Versioning (DVC)
+- Track all datasets in `data/`
+- Track model checkpoints in `models/`
+- Commit `.dvc` files to git
+- Use semantic versioning for model releases
+
+### Model Files
+- Naming: `{model_arch}_v{version}_{metric}.pth`
+- Example: `mobilenetv2_v1.2_acc0.87.pth`
+- Include metadata JSON with training config
+
+---
+
+## Cloud & Deployment
+
+### Environment Variables
+- Never hardcode secrets
+- Use `.env` files locally (gitignored)
+- Use cloud secret managers in production
+- Document all required env vars in README
+
+### Logging
+- Use structured logging (JSON format)
+- Log levels: DEBUG (dev), INFO (prod), ERROR (always)
+- Include trace IDs for request tracking
+
+---
+
+## Communication Style
+
+### When Responding to Requests
+- **Confirm understanding** if request is complex
+- **Propose approach** before implementing large changes
+- **Highlight tradeoffs** when multiple solutions exist
+- **Ask for priorities** when requirements conflict
+
+### Code Comments
+- **Why, not what**: Explain reasoning, not obvious behavior
+- **Warnings**: Flag gotchas, performance considerations, dependencies
+- **TODOs**: Include context and priority
+
+```python
+## Anti-Patterns to Avoid
+
+### Code
+- ❌ Overly complex abstractions for simple tasks
+- ❌ Premature optimization
+- ❌ Copy-pasting code instead of refactoring to shared function
+- ❌ Ignoring errors silently (`except: pass`)
+- ❌ Magic numbers without explanation
+
+### Communication
+- ❌ Long explanations when code example is clearer
+- ❌ Implementing without confirming approach first
+- ❌ Assuming requirements without asking
+- ❌ Making breaking changes without discussion
+
+### Project Management
+- ❌ Forgetting to update CHANGELOG.md
+- ❌ Creating files without checking STRUCTURE.md
+- ❌ Mixing multiple unrelated changes in one commit
+- ❌ Skipping tests "to save time"
+
+---
+
+### Starting a Feature
+```bash
+# 1. Check structure
+cat STRUCTURE.md | grep -A 5 "relevant_section"
+
+# 2. Create branch
+git checkout -b feature/your-feature
+
+# 3. Implement & test
+pytest tests/test_new_feature.py
+
+# 4. Update docs
+# Edit CHANGELOG.md
+# Edit STRUCTURE.md if files added
+
+# 5. Commit
+git commit -m "Add feature: brief description"
+```
+
+### Helpful Commands
+```bash
+# Format code
+black src/
+
+# Lint
+flake8 src/
+
+# Type check
+mypy src/
+
+# Run tests with coverage
+pytest --cov=src tests/
+
+# Check what DVC tracks
+dvc status
+
+# View MLflow runs
+mlflow ui
+```
+
+---
+
+## Questions to Ask
+
+When context is unclear, ask:
+- "What's the expected behavior if X fails?"
+- "Should this be optimized for speed or accuracy?"
+- "Do you want me to update tests/docs as well?"
+- "Is this blocking other work, or can we iterate?"
+- "Where should this fit in the existing structure?"
+
+---
+
+## Version
+Review this file periodically as project evolves.
