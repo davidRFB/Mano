@@ -118,7 +118,7 @@ def draw_ui(
 
     # Last capture
     if last_letter:
-        display = "Ñ" if last_letter == "nn" else last_letter.upper()
+        display = "NN" if last_letter == "nn" else last_letter.upper()
         cv2.putText(
             frame, f"Last: {display} ({last_count})", (10, 65),
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1
@@ -126,7 +126,7 @@ def draw_ui(
 
     # Instructions
     cv2.putText(
-        frame, "A-Z: capture | DOWN: Ñ | ESC: quit",
+        frame, "A-Z: capture | DOWN: NN | ESC: quit",
         (w - 280, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1
     )
 
@@ -284,7 +284,7 @@ def main() -> None:
 
         if letter:
             if not hand_detected:
-                display = "Ñ" if letter == "nn" else letter.upper()
+                display = "NN" if letter == "nn" else letter.upper()
                 print(f"[!] No hand detected - cannot capture '{display}'")
                 continue
 
@@ -307,7 +307,7 @@ def main() -> None:
             last_letter = letter
             last_count = len(list((output_dir / letter).glob(f"*.{ext}")))
 
-            display = "Ñ" if letter == "nn" else letter.upper()
+            display = "NN" if letter == "nn" else letter.upper()
             if mode == "landmarks":
                 print(f"Saved: {filepath.name} shape={landmarks.shape} | Total {display}: {last_count}")
             else:

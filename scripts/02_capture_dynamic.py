@@ -140,7 +140,7 @@ def draw_ui(
 
         # Last capture
         if last_letter:
-            display = "Ñ" if last_letter == "nn" else last_letter.upper()
+            display = "NN" if last_letter == "nn" else last_letter.upper()
             cv2.putText(
                 frame, f"Last: {display} ({last_count})", (10, 68),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1
@@ -148,7 +148,7 @@ def draw_ui(
 
         # Instructions
         cv2.putText(
-            frame, "A-Z: record | DOWN: Ñ | ESC: quit",
+            frame, "A-Z: record | DOWN: NN | ESC: quit",
             (w - 270, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1
         )
 
@@ -294,7 +294,7 @@ def main() -> None:
 
                 # Check if recording complete
                 if len(record_landmarks) >= num_frames:
-                    display = "Ñ" if record_letter == "nn" else record_letter.upper()
+                    display = "NN" if record_letter == "nn" else record_letter.upper()
 
                     # Save landmarks
                     if mode in ("landmarks", "both"):
@@ -345,7 +345,7 @@ def main() -> None:
 
             if letter:
                 if not hand_detected:
-                    display = "Ñ" if letter == "nn" else letter.upper()
+                    display = "NN" if letter == "nn" else letter.upper()
                     print(f"[!] No hand detected - cannot record '{display}'")
                 else:
                     recording = True
@@ -353,7 +353,7 @@ def main() -> None:
                     record_landmarks = []
                     record_frames = []
                     record_bbox = current_bbox
-                    display = "Ñ" if letter == "nn" else letter.upper()
+                    display = "NN" if letter == "nn" else letter.upper()
                     print(f"Recording '{display}'...")
 
     hands.close()

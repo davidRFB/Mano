@@ -7,6 +7,7 @@ Input: Single frame of extracted features (e.g., 56 features for xy_angles mode)
 
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
 
 class StaticMLP(nn.Module):
@@ -42,6 +43,62 @@ class StaticMLP(nn.Module):
             # Output layer
             nn.Linear(hidden_dim // 2, num_classes),
         )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
+
+
+class StaticMobileNetV2(nn.Module):
+    """
+    MobileNetV2 for static gesture classification from images.
+
+    Simple classifier head - works best when fine-tuning full model.
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 22,
+        pretrained: bool = True,
+        freeze_backbone: bool = False,
+    ):
+        super().__init__()
+        self.model = models.mobilenet_v2(weights='DEFAULT' if pretrained else None)
+
+        if freeze_backbone and pretrained:
+            for param in self.model.features.parameters():
+                param.requires_grad = False
+
+        # Simple head: just replace final layer (like original cv_model)
+        in_features = self.model.classifier[1].in_features
+        self.model.classifier[1] = nn.Linear(in_features, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
+
+
+class StaticMobileNet(nn.Module):
+    """
+    MobileNetV3-Small for static gesture classification from images.
+
+    Simple classifier head - better for transfer learning.
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 22,
+        pretrained: bool = True,
+        freeze_backbone: bool = False,
+    ):
+        super().__init__()
+        self.model = models.mobilenet_v3_small(weights='DEFAULT' if pretrained else None)
+
+        if freeze_backbone and pretrained:
+            for param in self.model.features.parameters():
+                param.requires_grad = False
+
+        # Simple head: just replace final layer (better for transfer learning)
+        in_features = self.model.classifier[3].in_features
+        self.model.classifier[3] = nn.Linear(in_features, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)

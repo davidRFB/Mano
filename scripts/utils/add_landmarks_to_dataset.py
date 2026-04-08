@@ -2,11 +2,14 @@
 Batch process dataset to add MediaPipe hand landmarks.
 
 Usage:
-    python scripts/add_landmarks_to_dataset.py
-    python scripts/add_landmarks_to_dataset.py --confidence 0.3
+    python scripts/utils/add_landmarks_to_dataset.py
+    python scripts/utils/add_landmarks_to_dataset.py --output data/raw_photo_landmark
+    python scripts/utils/add_landmarks_to_dataset.py --confidence 0.3
 
-Input:  data/raw/{a-z}/*.jpg (cropped hand images)
-Output: data/raw_landmarks/{a-z}/*.jpg (same images + MediaPipe landmarks)
+Options:
+    --input:      Input directory (default: data/raw)
+    --output:     Output directory (default: data/raw_landmarks)
+    --confidence: Min detection confidence (default: 0.1)
 
 Skips images where no hand is detected and logs them for review.
 
@@ -22,8 +25,8 @@ from datetime import datetime
 
 
 # Configuration
-INPUT_DIR = Path("data/raw")
-OUTPUT_DIR = Path("data/raw_landmarks")
+DEFAULT_INPUT_DIR = Path("data/raw")
+DEFAULT_OUTPUT_DIR = Path("data/raw_landmarks")
 DEFAULT_CONFIDENCE = 0.1  # Lower than capture_data.py due to cropped images
 
 # Statistics
@@ -34,11 +37,11 @@ stats = {
 }
 
 
-def ensure_output_dirs() -> None:
-    """Create output directories for each letter a-z."""
-    for letter in "abcdefghijklmnopqrstuvwxyz":
-        letter_dir = OUTPUT_DIR / letter
-        letter_dir.mkdir(parents=True, exist_ok=True)
+def ensure_output_dirs(output_dir: Path, input_dir: Path) -> None:
+    """Create output directories matching input structure."""
+    for letter_dir in input_dir.iterdir():
+        if letter_dir.is_dir():
+            (output_dir / letter_dir.name).mkdir(parents=True, exist_ok=True)
 
 
 def process_image(
@@ -94,18 +97,22 @@ def process_image(
     return True
 
 
-def process_dataset(confidence: float = DEFAULT_CONFIDENCE) -> None:
+def process_dataset(
+    input_dir: Path = DEFAULT_INPUT_DIR,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> None:
     """Process all images in the dataset."""
     print("=" * 60)
     print("LSC Dataset - Add MediaPipe Landmarks")
     print("=" * 60)
-    print(f"Input:  {INPUT_DIR.absolute()}")
-    print(f"Output: {OUTPUT_DIR.absolute()}")
+    print(f"Input:  {input_dir.absolute()}")
+    print(f"Output: {output_dir.absolute()}")
     print(f"Detection confidence: {confidence}")
     print("=" * 60)
 
     # Create output directories
-    ensure_output_dirs()
+    ensure_output_dirs(output_dir, input_dir)
 
     # Initialize MediaPipe Hands
     mp_hands = mp.solutions.hands
@@ -119,10 +126,10 @@ def process_dataset(confidence: float = DEFAULT_CONFIDENCE) -> None:
     )
 
     # Get all letter directories
-    letter_dirs = sorted([d for d in INPUT_DIR.iterdir() if d.is_dir()])
+    letter_dirs = sorted([d for d in input_dir.iterdir() if d.is_dir()])
 
     if not letter_dirs:
-        print(f"[ERROR] No letter directories found in {INPUT_DIR}")
+        print(f"[ERROR] No letter directories found in {input_dir}")
         return
 
     print(f"\nProcessing {len(letter_dirs)} letter directories...\n")
@@ -130,7 +137,7 @@ def process_dataset(confidence: float = DEFAULT_CONFIDENCE) -> None:
     # Process each letter directory
     for letter_dir in letter_dirs:
         letter = letter_dir.name
-        output_letter_dir = OUTPUT_DIR / letter
+        output_letter_dir = output_dir / letter
 
         # Get all images in this letter directory
         images = sorted(letter_dir.glob("*.jpg"))
@@ -192,7 +199,7 @@ def process_dataset(confidence: float = DEFAULT_CONFIDENCE) -> None:
 
     # Log failed files if any
     if stats["failed_files"]:
-        log_path = OUTPUT_DIR / "failed_detections.txt"
+        log_path = output_dir / "failed_detections.txt"
         with open(log_path, "w") as f:
             f.write(f"# Failed hand detections - {datetime.now().isoformat()}\n")
             f.write(f"# Total: {len(stats['failed_files'])} files\n\n")
@@ -200,12 +207,24 @@ def process_dataset(confidence: float = DEFAULT_CONFIDENCE) -> None:
                 f.write(f"{path}\n")
         print(f"\nFailed files logged to: {log_path}")
 
-    print(f"\nOutput saved to: {OUTPUT_DIR.absolute()}")
+    print(f"\nOutput saved to: {output_dir.absolute()}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Add MediaPipe landmarks to hand gesture dataset"
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_INPUT_DIR,
+        help=f"Input directory (default: {DEFAULT_INPUT_DIR})",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
     )
     parser.add_argument(
         "--confidence",
@@ -215,5 +234,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    process_dataset(confidence=args.confidence)
+    process_dataset(
+        input_dir=args.input,
+        output_dir=args.output,
+        confidence=args.confidence,
+    )
 

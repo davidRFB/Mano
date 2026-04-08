@@ -26,17 +26,20 @@ class Trainer:
         lr: float = 1e-3,
         weight_decay: float = 1e-4,
         device: torch.device = DEVICE,
+        config: dict | None = None,
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
+        self.config = config or {}
 
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
         self.scheduler = None
 
-        self.best_val_acc = 0.0
+        self.best_val_loss = float("inf")
+        self.best_val_acc = 0.0  # Track for logging purposes
         self.history: dict[str, list[float]] = {
             "train_loss": [],
             "train_acc": [],
@@ -92,6 +95,7 @@ class Trainer:
         checkpoint_dir: Path | None = None,
         early_stop_patience: int = 20,
         verbose: bool = True,
+        on_epoch_end: Callable[[int, dict[str, float]], None] | None = None,
     ) -> dict[str, list[float]]:
         """
         Train the model.
@@ -101,6 +105,8 @@ class Trainer:
             checkpoint_dir: Directory to save checkpoints
             early_stop_patience: Stop if no improvement for N epochs
             verbose: Print progress
+            on_epoch_end: Optional callback called after each epoch with
+                          (epoch, metrics_dict) for live logging
 
         Returns:
             Training history dict
@@ -112,8 +118,7 @@ class Trainer:
             checkpoint_dir = Path(checkpoint_dir)
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-        pbar = tqdm(range(epochs), disable=not verbose)
-        for epoch in pbar:
+        for epoch in range(epochs):
             train_loss, train_acc = self.train_epoch()
             val_loss, val_acc = self.validate()
 
@@ -125,14 +130,30 @@ class Trainer:
             self.history["val_loss"].append(val_loss)
             self.history["val_acc"].append(val_acc)
 
-            # Update progress bar
-            pbar.set_description(
-                f"Train: {train_acc:.1%} | Val: {val_acc:.1%} | Best: {self.best_val_acc:.1%}"
-            )
+            # Print detailed metrics periodically
+            if verbose:
+                best_str = f"{self.best_val_loss:.4f}" if self.best_val_loss < float("inf") else "-"
+                print(
+                    f"\nEpoch {epoch + 1}/{epochs} - "
+                    f"train_loss: {train_loss:.4f}, train_acc: {train_acc:.1%}, "
+                    f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.1%}, "
+                    f"best_loss: {best_str}"
+                )
 
-            # Check for improvement
-            if val_acc > self.best_val_acc:
-                self.best_val_acc = val_acc
+            # Call epoch callback for live logging (e.g., MLflow)
+            if on_epoch_end:
+                metrics = {
+                    "train_loss": train_loss,
+                    "train_acc": train_acc,
+                    "val_loss": val_loss,
+                    "val_acc": val_acc,
+                }
+                on_epoch_end(epoch, metrics)
+
+            # Check for improvement (based on lowest validation loss)
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                self.best_val_acc = val_acc  # Track corresponding accuracy
                 no_improve = 0
 
                 if checkpoint_dir:
@@ -149,11 +170,13 @@ class Trainer:
         return self.history
 
     def save_checkpoint(self, path: Path) -> None:
-        """Save model checkpoint."""
+        """Save model checkpoint with config."""
         torch.save({
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
+            "best_val_loss": self.best_val_loss,
             "best_val_acc": self.best_val_acc,
+            "config": self.config,
         }, path)
 
     def load_checkpoint(self, path: Path) -> None:
@@ -161,4 +184,5 @@ class Trainer:
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.best_val_loss = checkpoint.get("best_val_loss", float("inf"))
         self.best_val_acc = checkpoint.get("best_val_acc", 0.0)

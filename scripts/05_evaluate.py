@@ -3,7 +3,11 @@
 Evaluate trained models and generate metrics.
 
 Usage:
-    python scripts/05_evaluate.py --checkpoint models/checkpoints/<run_id>/best.pth
+    python scripts/05_evaluate.py --run-id <mlflow_run_id>
+    python scripts/05_evaluate.py --run-name <mlflow_run_name>
+    python scripts/05_evaluate.py --list                    # List runs from default experiment
+    python scripts/05_evaluate.py --list --experiment foo   # List runs from specific experiment
+    python scripts/05_evaluate.py --list-all                # List runs from ALL experiments
 
 Outputs:
     - Accuracy metrics
@@ -13,15 +17,19 @@ Outputs:
 """
 
 import argparse
+import sys
 from pathlib import Path
+
+# Add project root to python path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from src.data.dataset import create_dataloaders
-from src.models import get_model
+from src.preprocessing.dataset import create_dataloaders
+from src.training import load_model_from_mlflow, list_runs, list_all_runs, list_experiments
 from src.training.metrics import (
     compute_accuracy,
     compute_confusion_matrix,
@@ -30,24 +38,6 @@ from src.training.metrics import (
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 FIGURES_DIR = Path("blog/figures")
-
-
-def load_model_from_checkpoint(checkpoint_path: Path):
-    """Load model and config from checkpoint."""
-    checkpoint = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-    config = checkpoint.get("config", {})
-
-    model = get_model(
-        model_type=config.get("model", "bigru"),
-        num_classes=config["num_classes"],
-        input_dim=config["input_dim"],
-        hidden_dim=config.get("hidden_dim", 128),
-    )
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.to(DEVICE)
-    model.eval()
-
-    return model, config
 
 
 def plot_confusion_matrix(cm: np.ndarray, classes: list[str], save_path: Path) -> None:
@@ -72,22 +62,66 @@ def plot_confusion_matrix(cm: np.ndarray, classes: list[str], save_path: Path) -
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate LSC model")
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to model checkpoint")
+    parser.add_argument("--run-id", type=str, help="MLflow run ID")
+    parser.add_argument("--run-name", type=str, help="MLflow run name")
+    parser.add_argument("--list", action="store_true", help="List runs from experiment")
+    parser.add_argument("--list-all", action="store_true", help="List runs from ALL experiments")
+    parser.add_argument("--experiment", type=str, default="lsc_letters", help="Experiment name for --list")
     parser.add_argument("--data-dir", type=str, default="data/raw_landmarks")
     args = parser.parse_args()
 
-    checkpoint_path = Path(args.checkpoint)
-    if not checkpoint_path.exists():
-        print(f"Error: Checkpoint not found: {checkpoint_path}")
+    def fmt_acc(val: float | None) -> str:
+        return f"{val:.1%}" if val is not None else "  -  "
+
+    def print_run(run: dict, show_experiment: bool = False) -> None:
+        train = fmt_acc(run["train_acc"])
+        val = fmt_acc(run["val_acc"])
+        test = fmt_acc(run["test_acc"])
+        name = run["run_name"] or "unnamed"
+        exp = f"{run['experiment']:<15}  " if show_experiment else ""
+        print(f"  {exp}{name:<25}  train={train}  val={val}  test={test}  {run['status']:<10}  {run['run_id']}")
+
+    # List all runs mode
+    if args.list_all:
+        print("All MLflow runs:")
+        experiments = list_experiments()
+        print(f"Experiments: {experiments}\n")
+        print(f"  {'experiment':<15}  {'run_name':<25}  {'train':<10}  {'val':<10}  {'test':<10}  {'status':<10}  run_id")
+        print("-" * 130)
+        for run in list_all_runs(limit=20):
+            print_run(run, show_experiment=True)
+        return
+
+    # List runs from specific experiment
+    if args.list:
+        print(f"MLflow runs (experiment: {args.experiment}):")
+        print(f"  {'run_name':<25}  {'train':<10}  {'val':<10}  {'test':<10}  {'status':<10}  run_id")
+        print("-" * 115)
+        runs = list_runs(experiment_name=args.experiment, limit=10)
+        if not runs:
+            print(f"  No runs found. Available experiments: {list_experiments()}")
+        for run in runs:
+            print_run(run, show_experiment=False)
+        return
+
+    if not args.run_id and not args.run_name:
+        print("Error: Must provide --run-id or --run-name (or use --list)")
         return
 
     print("=" * 60)
     print("Model Evaluation")
     print("=" * 60)
 
-    # Load model
-    model, config = load_model_from_checkpoint(checkpoint_path)
+    # Load model from MLflow
+    try:
+        model, config = load_model_from_mlflow(
+            run_id=args.run_id,
+            run_name=args.run_name,
+            device=DEVICE,
+        )
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
     classes = config.get("classes", [])
     feature_mode = config.get("feature_mode", "xy_angles")
     model_type = config.get("model", "bigru")
@@ -100,7 +134,7 @@ def main():
     output_mode = "static" if model_type == "static" else "sequence"
 
     # Load data
-    train_loader, val_loader, _, _, _ = create_dataloaders(
+    train_loader, val_loader, _, _, _, _ = create_dataloaders(
         data_dir=Path(args.data_dir),
         feature_mode=feature_mode,
         output_mode=output_mode,
