@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from src.data.preprocessing import (
+from src.preprocessing import (
     normalize_landmarks,
     extract_features,
     extract_single_frame_features,

@@ -2,6 +2,7 @@
 
 from src.preprocessing.preprocessing import (
     extract_features,
+    extract_single_frame_features,
     normalize_landmarks,
     FEATURE_MODES,
     DEFAULT_FEATURE_MODE,
@@ -9,6 +10,7 @@ from src.preprocessing.preprocessing import (
 
 __all__ = [
     "extract_features",
+    "extract_single_frame_features",
     "normalize_landmarks",
     "FEATURE_MODES",
     "DEFAULT_FEATURE_MODE",
